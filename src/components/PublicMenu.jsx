@@ -25,6 +25,9 @@ import { useAuth } from "../contexts/AuthContext";
 import { useSupabase } from "../hooks/useSupabase";
 import { useTemplate } from "../contexts/TemplateContext";
 
+const { currentTemplate } = useTemplate();
+const colors = currentTemplate.colors;
+
 const CATEGORIES = ["all", "food", "drink", "snack", "dessert", "other"];
 
 function Badge({ children, variant }) {
@@ -47,7 +50,6 @@ function MenuItemCard({ item, onClick }) {
   const isTrending = item.views > 150;
   const formatPrice = (p) => new Intl.NumberFormat("id-ID").format(p);
   const colors = currentTemplate.colors();
-  const { currentTemplate } = useTemplate();
 
   return (
     <div

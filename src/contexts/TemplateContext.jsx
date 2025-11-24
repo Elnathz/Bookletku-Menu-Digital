@@ -68,27 +68,6 @@ export function useTemplate() {
 export default TemplateContext;
 
 // ===============================================
-// Update main.jsx - Tambahkan TemplateProvider
-// ===============================================
-/*
-import { TemplateProvider } from "./contexts/TemplateContext";
-
-ReactDOM.createRoot(document.getElementById("root")).render(
-    <React.StrictMode>
-        <BrowserRouter>
-            <AuthProvider>
-                <LanguageProvider>
-                    <TemplateProvider>
-                        <App />
-                    </TemplateProvider>
-                </LanguageProvider>
-            </AuthProvider>
-        </BrowserRouter>
-    </React.StrictMode>
-);
-*/
-
-// ===============================================
 // Update PublicMenu.jsx - Gunakan template colors
 // ===============================================
 /*
@@ -103,10 +82,6 @@ const colors = currentTemplate.colors;
 // Contoh:
 // BEFORE: className="bg-gradient-to-r from-green-600 to-emerald-600"
 // AFTER:  className={`bg-gradient-to-r ${colors.gradient}`}
-
-// BEFORE: className="bg-green-500 hover:bg-green-600"
-// AFTER:  className={colors.button}
-*/
 
 // ===============================================
 // Update AdminDashboard Settings - Simpan template
