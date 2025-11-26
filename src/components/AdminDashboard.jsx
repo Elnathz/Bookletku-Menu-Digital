@@ -39,7 +39,7 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useSupabase } from "../hooks/useSupabase";
 import Modal from "./Modal";
-import ItemForm from "./ItemForm";
+import ItemForm from "./itemForm";
 import { MenuCard } from "./MenuCard";
 import QRCodeDisplay from "./QRCode";
 
@@ -396,6 +396,8 @@ export function AdminDashboard() {
   const {
     items,
     settings,
+    customCategories,
+    addCustomCategory,
     loading,
     addItem,
     updateItem,
@@ -627,6 +629,8 @@ export function AdminDashboard() {
         title={t.addItem}
       >
         <ItemForm
+          customCategories={customCategories} // ← PASS INI
+          addCustomCategory={addCustomCategory}
           onSave={handleSaveItem}
           onCancel={() => setModal(null)}
           onUploadPhoto={uploadPhoto}
@@ -644,6 +648,8 @@ export function AdminDashboard() {
         {editingItem && (
           <ItemForm
             item={editingItem}
+            customCategories={customCategories}
+            addCustomCategory={addCustomCategory}
             onSave={handleSaveItem}
             onCancel={() => {
               setModal(null);
