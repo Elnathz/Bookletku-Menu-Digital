@@ -1,0 +1,533 @@
+import React, { useState } from "react";
+import {
+    Search,
+    ShoppingCart,
+    X,
+    Minus,
+    Plus,
+    MessageCircle,
+    Trash2,
+    Send,
+    Store,
+    ChevronDown,
+    ChevronUp,
+} from "lucide-react";
+import { MenuCardSimple } from "./MenuCard";
+import { useLanguage } from "../contexts/LanguageContext";
+
+const CATEGORIES = ["all", "food", "drink", "snack", "dessert", "other"];
+
+export function CustomerView({ items, settings, onIncrementViews, onBack }) {
+    const { t, lang } = useLanguage();
+
+    const [cart, setCart] = useState([]);
+    const [search, setSearch] = useState("");
+    const [selectedCategory, setSelectedCategory] = useState("all");
+    const [showCart, setShowCart] = useState(false);
+    const [customerName, setCustomerName] = useState("");
+    const [customerNote, setCustomerNote] = useState("");
+    const [tableNumber, setTableNumber] = useState("");
+    const [orderType, setOrderType] = useState("dine-in");
+    const [showOrderForm, setShowOrderForm] = useState(false);
+
+    const filteredItems = items
+        .filter(
+            (item) =>
+                selectedCategory === "all" || item.category === selectedCategory
+        )
+        .filter((item) =>
+            item.name.toLowerCase().includes(search.toLowerCase())
+        )
+        .sort((a, b) => a.order - b.order);
+
+    const addToCart = (item) => {
+        onIncrementViews(item.id);
+        setCart((prev) => {
+            const existing = prev.find((c) => c.id === item.id);
+            if (existing) {
+                return prev.map((c) =>
+                    c.id === item.id ? { ...c, qty: c.qty + 1 } : c
+                );
+            }
+            return [...prev, { ...item, qty: 1, note: "" }];
+        });
+    };
+
+    const updateQty = (id, delta) => {
+        setCart((prev) =>
+            prev
+                .map((item) => {
+                    if (item.id === id) {
+                        const newQty = item.qty + delta;
+                        return newQty > 0 ? { ...item, qty: newQty } : item;
+                    }
+                    return item;
+                })
+                .filter((item) => item.qty > 0)
+        );
+    };
+
+    const updateItemNote = (id, note) => {
+        setCart((prev) =>
+            prev.map((item) => (item.id === id ? { ...item, note } : item))
+        );
+    };
+
+    const removeFromCart = (id) =>
+        setCart((prev) => prev.filter((c) => c.id !== id));
+    const clearCart = () => {
+        setCart([]);
+        setShowCart(false);
+        setShowOrderForm(false);
+    };
+
+    const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
+    const totalPrice = cart.reduce(
+        (sum, item) => sum + item.price * item.qty,
+        0
+    );
+
+    const formatPrice = (price) => new Intl.NumberFormat("id-ID").format(price);
+
+    const getDateTime = () => {
+        const now = new Date();
+        return now.toLocaleDateString(lang === "id" ? "id-ID" : "en-US", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    };
+
+    const orderTypeLabels = {
+        "dine-in": lang === "id" ? "Makan di Tempat" : "Dine In",
+        takeaway: lang === "id" ? "Bawa Pulang" : "Takeaway",
+        delivery: lang === "id" ? "Delivery" : "Delivery",
+    };
+
+    // Generate WhatsApp message - FIXED tanpa emoji problematic
+    const generateWhatsAppMessage = () => {
+        const storeName = settings.storeName || "Store";
+        const dateTime = getDateTime();
+
+        let lines = [];
+
+        // Header
+        lines.push(
+            lang === "id" ? "=== PESANAN BARU ===" : "=== NEW ORDER ==="
+        );
+        lines.push("");
+        lines.push(storeName);
+        lines.push(dateTime);
+        lines.push("-------------------");
+        lines.push("");
+
+        // Customer info
+        if (customerName) {
+            lines.push(
+                lang === "id"
+                    ? "Nama: " + customerName
+                    : "Name: " + customerName
+            );
+        }
+        lines.push(
+            lang === "id"
+                ? "Tipe: " + orderTypeLabels[orderType]
+                : "Type: " + orderTypeLabels[orderType]
+        );
+
+        if (orderType === "dine-in" && tableNumber) {
+            lines.push(
+                lang === "id"
+                    ? "No. Meja: " + tableNumber
+                    : "Table No: " + tableNumber
+            );
+        }
+        lines.push("");
+
+        // Order items
+        lines.push(
+            lang === "id" ? "--- DETAIL PESANAN ---" : "--- ORDER DETAILS ---"
+        );
+        lines.push("");
+
+        cart.forEach((item, index) => {
+            const itemTotal = item.price * item.qty;
+            lines.push(index + 1 + ". " + item.name);
+            lines.push("   " + item.qty + "x @ Rp " + formatPrice(item.price));
+            lines.push("   = Rp " + formatPrice(itemTotal));
+            if (item.note) {
+                lines.push("   Catatan: " + item.note);
+            }
+            lines.push("");
+        });
+
+        lines.push("-------------------");
+        lines.push(
+            lang === "id"
+                ? "TOTAL: Rp " +
+                      formatPrice(totalPrice) +
+                      " (" +
+                      totalItems +
+                      " item)"
+                : "TOTAL: Rp " +
+                      formatPrice(totalPrice) +
+                      " (" +
+                      totalItems +
+                      " items)"
+        );
+        lines.push("-------------------");
+
+        if (customerNote) {
+            lines.push("");
+            lines.push(
+                lang === "id" ? "Catatan Tambahan:" : "Additional Notes:"
+            );
+            lines.push(customerNote);
+        }
+
+        lines.push("");
+        lines.push(lang === "id" ? "Terima kasih!" : "Thank you!");
+        lines.push("- BookletKu -");
+
+        return lines.join("\n");
+    };
+
+    const orderViaWhatsApp = () => {
+        const message = generateWhatsAppMessage();
+        const phone = (settings.whatsappNumber || "").replace(/[^0-9]/g, "");
+        const waUrl =
+            "https://wa.me/" +
+            phoneNumber +
+            "?text=" +
+            encodeURIComponent(message);
+        window.open(waUrl, "_blank");
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-50 pb-32">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#333fa1] to-[#000f89] text-white">
+                <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                            {onBack && (
+                                <button
+                                    onClick={onBack}
+                                    className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+                                >
+                                    <X size={20} />
+                                </button>
+                            )}
+                            <div>
+                                <h1 className="text-xl font-bold flex items-center gap-2">
+                                    <Store size={20} />
+                                    {settings.storeName}
+                                </h1>
+                                <p className="text-[#cccfe7] text-xs">
+                                    {t.tagline}
+                                </p>
+                            </div>
+                        </div>
+
+                        {cart.length > 0 && (
+                            <button
+                                onClick={() => setShowCart(!showCart)}
+                                className="relative p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
+                            >
+                                <ShoppingCart size={22} />
+                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
+                                    {totalItems}
+                                </span>
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="relative">
+                        <Search
+                            size={18}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                        />
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder={t.searchPlaceholder}
+                            className="w-full pl-10 pr-4 py-2.5 bg-white text-gray-900 rounded-xl outline-none"
+                        />
+                    </div>
+                </div>
+
+                <div className="px-4 pb-4">
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                        {CATEGORIES.map((cat) => (
+                            <button
+                                key={cat}
+                                onClick={() => setSelectedCategory(cat)}
+                                className={`px-4 py-1.5 rounded-full whitespace-nowrap text-sm font-medium transition-all ${
+                                    selectedCategory === cat
+                                        ? "bg-white text-[#666fb8]"
+                                        : "bg-white/20 text-white hover:bg-white/30"
+                                }`}
+                            >
+                                {cat === "all" ? t.allCategories : t[cat]}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Menu Grid - Fixed Card Size */}
+            <div className="p-4">
+                {filteredItems.length === 0 ? (
+                    <div className="text-center py-12">
+                        <p className="text-gray-500">{t.noResults}</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        {filteredItems.map((item) => (
+                            <MenuCardSimple
+                                key={item.id}
+                                item={item}
+                                onClick={() => addToCart(item)}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Floating Cart Button */}
+            {cart.length > 0 && !showCart && (
+                <button
+                    onClick={() => setShowCart(true)}
+                    className="fixed bottom-6 right-6 bg-[#666fb8]  text-white p-4 rounded-full shadow-lg hover:bg-[#666fb8]  transition-all z-40"
+                >
+                    <ShoppingCart size={24} />
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold">
+                        {totalItems}
+                    </span>
+                </button>
+            )}
+
+            {/* Cart Panel */}
+            {showCart && cart.length > 0 && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-50"
+                    onClick={() => setShowCart(false)}
+                >
+                    <div
+                        className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[85vh] overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="sticky top-0 bg-white border-b p-4 flex items-center justify-between">
+                            <h3 className="font-bold text-lg flex items-center gap-2">
+                                <ShoppingCart
+                                    size={20}
+                                    className="text-[#666fb8]"
+                                />
+                                {lang === "id" ? "Keranjang" : "Cart"} (
+                                {totalItems})
+                            </h3>
+                            <button
+                                onClick={() => setShowCart(false)}
+                                className="p-2 hover:bg-gray-100 rounded-full"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="overflow-y-auto max-h-[40vh] p-4 space-y-3">
+                            {cart.map((item) => (
+                                <div
+                                    key={item.id}
+                                    className="bg-gray-50 rounded-xl p-3"
+                                >
+                                    <div className="flex gap-3">
+                                        {item.photo && (
+                                            <img
+                                                src={item.photo}
+                                                alt={item.name}
+                                                className="w-14 h-14 object-cover rounded-lg"
+                                            />
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="font-medium text-gray-900 text-sm truncate">
+                                                {item.name}
+                                            </h4>
+                                            <p className="text-[#666fb8] font-bold text-sm">
+                                                Rp {formatPrice(item.price)}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <button
+                                                    onClick={() =>
+                                                        updateQty(item.id, -1)
+                                                    }
+                                                    className="w-7 h-7 flex items-center justify-center bg-white border rounded-lg"
+                                                >
+                                                    <Minus size={12} />
+                                                </button>
+                                                <span className="font-medium w-6 text-center text-sm">
+                                                    {item.qty}
+                                                </span>
+                                                <button
+                                                    onClick={() =>
+                                                        updateQty(item.id, 1)
+                                                    }
+                                                    className="w-7 h-7 flex items-center justify-center bg-white border rounded-lg"
+                                                >
+                                                    <Plus size={12} />
+                                                </button>
+                                                <button
+                                                    onClick={() =>
+                                                        removeFromCart(item.id)
+                                                    }
+                                                    className="ml-auto p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={item.note || ""}
+                                        onChange={(e) =>
+                                            updateItemNote(
+                                                item.id,
+                                                e.target.value
+                                            )
+                                        }
+                                        placeholder={
+                                            lang === "id"
+                                                ? "Catatan: pedas, tanpa sayur..."
+                                                : "Note: spicy, no veggies..."
+                                        }
+                                        className="w-full mt-2 px-3 py-1.5 text-xs border rounded-lg outline-none focus:ring-1 focus:ring-[#666fb8]"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        {showOrderForm && (
+                            <div className="border-t p-4 bg-gray-50 space-y-3">
+                                <h4 className="font-medium text-gray-900 text-sm">
+                                    {lang === "id"
+                                        ? "Detail Pesanan"
+                                        : "Order Details"}
+                                </h4>
+                                <input
+                                    type="text"
+                                    value={customerName}
+                                    onChange={(e) =>
+                                        setCustomerName(e.target.value)
+                                    }
+                                    placeholder={
+                                        lang === "id"
+                                            ? "Nama Anda"
+                                            : "Your Name"
+                                    }
+                                    className="w-full px-3 py-2 text-sm border rounded-lg outline-none focus:ring-1 focus:ring-[#666fb8]"
+                                />
+                                <div className="flex gap-2">
+                                    {Object.entries(orderTypeLabels).map(
+                                        ([key, label]) => (
+                                            <button
+                                                key={key}
+                                                onClick={() =>
+                                                    setOrderType(key)
+                                                }
+                                                className={`flex-1 py-2 px-2 rounded-lg text-xs font-medium transition-all ${
+                                                    orderType === key
+                                                        ? "bg-[#666fb8]  text-white"
+                                                        : "bg-white border"
+                                                }`}
+                                            >
+                                                {label}
+                                            </button>
+                                        )
+                                    )}
+                                </div>
+                                {orderType === "dine-in" && (
+                                    <input
+                                        type="text"
+                                        value={tableNumber}
+                                        onChange={(e) =>
+                                            setTableNumber(e.target.value)
+                                        }
+                                        placeholder={
+                                            lang === "id"
+                                                ? "Nomor Meja"
+                                                : "Table Number"
+                                        }
+                                        className="w-full px-3 py-2 text-sm border rounded-lg outline-none focus:ring-1 focus:ring-[#666fb8]"
+                                    />
+                                )}
+                                <textarea
+                                    value={customerNote}
+                                    onChange={(e) =>
+                                        setCustomerNote(e.target.value)
+                                    }
+                                    placeholder={
+                                        lang === "id"
+                                            ? "Catatan tambahan..."
+                                            : "Additional notes..."
+                                    }
+                                    rows={2}
+                                    className="w-full px-3 py-2 text-sm border rounded-lg outline-none focus:ring-1 focus:ring-[#666fb8] resize-none"
+                                />
+                            </div>
+                        )}
+
+                        <div className="sticky bottom-0 bg-white border-t p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs text-gray-500">
+                                        {lang === "id" ? "Total" : "Total"}
+                                    </p>
+                                    <p className="text-xl font-bold text-gray-900">
+                                        Rp {formatPrice(totalPrice)}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() =>
+                                        setShowOrderForm(!showOrderForm)
+                                    }
+                                    className="text-xs text-[#666fb8] flex items-center gap-1"
+                                >
+                                    {showOrderForm ? (
+                                        <ChevronDown size={14} />
+                                    ) : (
+                                        <ChevronUp size={14} />
+                                    )}
+                                    {lang === "id" ? "Detail" : "Details"}
+                                </button>
+                            </div>
+                            <button
+                                onClick={orderViaWhatsApp}
+                                className="w-full flex items-center justify-center gap-2 bg-[#666fb8]  text-white py-3 rounded-xl font-medium hover:bg-[#666fb8]  transition-colors"
+                            >
+                                <MessageCircle size={20} />
+                                {lang === "id"
+                                    ? "Pesan via WhatsApp"
+                                    : "Order via WhatsApp"}
+                                <Send size={16} />
+                            </button>
+                            <button
+                                onClick={clearCart}
+                                className="w-full py-2 text-xs text-red-500 hover:bg-red-50 rounded-lg"
+                            >
+                                {lang === "id"
+                                    ? "Kosongkan Keranjang"
+                                    : "Clear Cart"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default CustomerView;

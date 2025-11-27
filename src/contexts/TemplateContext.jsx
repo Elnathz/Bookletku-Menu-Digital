@@ -21,10 +21,10 @@ export function TemplateProvider({ children }) {
       colors: {
         primary: "green",
         secondary: "emerald",
-        gradient: "from-green-600 to-emerald-600",
-        button: "bg-green-500 hover:bg-green-600",
+        gradient: "from-[#333fa1] to-[#000f89]",
+        button: "bg-[#666fb8]  hover:bg-[#666fb8] ",
         buttonText: "text-white",
-        badge: "bg-green-100 text-green-700",
+        badge: "bg-green-100 text-[#333fa1]",
       },
     },
     colorful: {
@@ -80,7 +80,7 @@ const colors = currentTemplate.colors;
 
 // Ganti semua class warna hijau dengan variable colors:
 // Contoh:
-// BEFORE: className="bg-gradient-to-r from-green-600 to-emerald-600"
+// BEFORE: className="bg-gradient-to-r from-[#333fa1] to-[#000f89]"
 // AFTER:  className={`bg-gradient-to-r ${colors.gradient}`}
 
 // ===============================================
