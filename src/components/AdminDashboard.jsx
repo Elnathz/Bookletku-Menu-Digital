@@ -35,7 +35,7 @@ import {
     Clock,
     MapPin,
     Phone,
-    Globe, // Globe sudah diimport
+    Globe,
 } from "lucide-react";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -74,7 +74,7 @@ function StatCard({ icon: Icon, label, value, trend, color }) {
     );
 }
 
-// Sidebar Component (FIXED POSITION & PROFILE BOTTOM)
+// Sidebar Component
 function Sidebar({ isOpen, onClose, currentPage, onNavigate }) {
     const { t, lang } = useLanguage();
     const { signOut, user } = useAuth();
@@ -105,7 +105,6 @@ function Sidebar({ isOpen, onClose, currentPage, onNavigate }) {
 
     return (
         <>
-            {/* Mobile Overlay */}
             {isOpen && (
                 <div
                     className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -113,7 +112,6 @@ function Sidebar({ isOpen, onClose, currentPage, onNavigate }) {
                 />
             )}
 
-            {/* Sidebar Container */}
             <aside
                 className={`
         fixed top-0 left-0 h-full w-64 bg-white border-r z-50 transform transition-transform duration-300
@@ -121,9 +119,8 @@ function Sidebar({ isOpen, onClose, currentPage, onNavigate }) {
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
       `}
             >
-                {/* Flex Container untuk menata Header, Menu, dan Footer */}
                 <div className="flex flex-col h-full">
-                    {/* 1. Header Sidebar */}
+                    {/* Header Sidebar */}
                     <div className="p-4 border-b flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-2">
                             <div className="w-10 h-10 bg-gradient-to-br from-[#666fb8] to-[#333fa1] rounded-xl flex items-center justify-center">
@@ -146,7 +143,7 @@ function Sidebar({ isOpen, onClose, currentPage, onNavigate }) {
                         </button>
                     </div>
 
-                    {/* 2. Menu Navigation (Flex Grow agar mengisi ruang tengah) */}
+                    {/* Menu Navigation */}
                     <nav className="p-4 space-y-1 flex-1 overflow-y-auto">
                         {menuItems.map((item) => (
                             <button
@@ -175,7 +172,7 @@ function Sidebar({ isOpen, onClose, currentPage, onNavigate }) {
                         ))}
                     </nav>
 
-                    {/* 3. User Profile (Selalu di Bawah / Bottom) */}
+                    {/* User Profile */}
                     <div className="p-4 border-t bg-gray-50 shrink-0">
                         <div className="flex items-center gap-3 mb-3">
                             <div className="w-10 h-10 bg-white border rounded-full flex items-center justify-center">
@@ -204,22 +201,18 @@ function Sidebar({ isOpen, onClose, currentPage, onNavigate }) {
     );
 }
 
-// Settings Page Component (UPDATED: 0-59 MINUTES)
+// Settings Page Component
 function SettingsPage({ settings, onSave }) {
     const { t, lang, toggleLang } = useLanguage();
     const { themeConfig, updateTheme } = useTemplate();
 
-    // Helper data untuk dropdown
     const hours = Array.from({ length: 24 }, (_, i) =>
         i.toString().padStart(2, "0")
     );
-
-    // FIX: Menit lengkap dari 00 sampai 59
     const minutes = Array.from({ length: 60 }, (_, i) =>
         i.toString().padStart(2, "0")
     );
 
-    // State Form
     const [form, setForm] = useState({
         storeName: "",
         storeLocation: "",
@@ -232,21 +225,17 @@ function SettingsPage({ settings, onSave }) {
 
     const [saved, setSaved] = useState(false);
 
-    // Sinkronisasi data saat settings dimuat
     useEffect(() => {
         if (settings) {
             let oh = "08",
                 om = "00",
                 ch = "22",
                 cm = "00";
-
-            // Parse format string "08:00 - 22:00"
             if (settings.operatingHours) {
                 const parts = settings.operatingHours.split(" - ");
                 if (parts.length === 2) {
                     const openParts = parts[0].split(":");
                     const closeParts = parts[1].split(":");
-
                     if (openParts.length === 2) {
                         oh = openParts[0];
                         om = openParts[1];
@@ -257,7 +246,6 @@ function SettingsPage({ settings, onSave }) {
                     }
                 }
             }
-
             setForm({
                 storeName: settings.storeName || "",
                 storeLocation: settings.storeLocation || "",
@@ -271,16 +259,13 @@ function SettingsPage({ settings, onSave }) {
     }, [settings]);
 
     const handleSave = async () => {
-        // Gabungkan kembali menjadi string "HH:MM - HH:MM"
         const fullOperatingHours = `${form.openHour}:${form.openMinute} - ${form.closeHour}:${form.closeMinute}`;
-
         const dataToSave = {
             storeName: form.storeName,
             storeLocation: form.storeLocation,
             whatsappNumber: form.whatsappNumber,
             operatingHours: fullOperatingHours,
         };
-
         await onSave(dataToSave);
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
@@ -364,20 +349,14 @@ function SettingsPage({ settings, onSave }) {
                 )}
             </div>
 
-            {/* Informasi Toko Config */}
+            {/* Informasi Toko */}
             <div className="bg-white rounded-xl border shadow-sm p-6 space-y-5">
                 <div className="text-center pb-4 border-b">
                     <h3 className="text-xl font-bold text-gray-900">
                         {lang === "id" ? "Informasi Toko" : "Store Information"}
                     </h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                        {lang === "id"
-                            ? "Kelola informasi dasar toko Anda"
-                            : "Manage basic store info"}
-                    </p>
                 </div>
 
-                {/* Store Name */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         <Store size={16} /> {t.storeName}
@@ -393,7 +372,6 @@ function SettingsPage({ settings, onSave }) {
                     />
                 </div>
 
-                {/* Store Location */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         <MapPin size={16} />{" "}
@@ -410,15 +388,12 @@ function SettingsPage({ settings, onSave }) {
                     />
                 </div>
 
-                {/* Operating Hours (SPLIT HOUR & MINUTE 0-59) */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         <Clock size={16} />{" "}
                         {lang === "id" ? "Jam Operasional" : "Operating Hours"}
                     </label>
-
                     <div className="flex flex-col sm:flex-row gap-4">
-                        {/* Jam Buka */}
                         <div className="flex-1 bg-gray-50 p-3 rounded-lg border">
                             <span className="text-xs font-semibold text-gray-500 mb-2 block uppercase">
                                 Buka (Open)
@@ -432,7 +407,7 @@ function SettingsPage({ settings, onSave }) {
                                             openHour: e.target.value,
                                         })
                                     }
-                                    className="flex-1 px-2 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white text-center font-mono cursor-pointer"
+                                    className="flex-1 px-2 py-2 border rounded-lg outline-none bg-white text-center font-mono cursor-pointer"
                                 >
                                     {hours.map((h) => (
                                         <option key={`oh-${h}`} value={h}>
@@ -449,7 +424,7 @@ function SettingsPage({ settings, onSave }) {
                                             openMinute: e.target.value,
                                         })
                                     }
-                                    className="flex-1 px-2 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white text-center font-mono cursor-pointer"
+                                    className="flex-1 px-2 py-2 border rounded-lg outline-none bg-white text-center font-mono cursor-pointer"
                                 >
                                     {minutes.map((m) => (
                                         <option key={`om-${m}`} value={m}>
@@ -459,8 +434,6 @@ function SettingsPage({ settings, onSave }) {
                                 </select>
                             </div>
                         </div>
-
-                        {/* Jam Tutup */}
                         <div className="flex-1 bg-gray-50 p-3 rounded-lg border">
                             <span className="text-xs font-semibold text-gray-500 mb-2 block uppercase">
                                 Tutup (Close)
@@ -474,7 +447,7 @@ function SettingsPage({ settings, onSave }) {
                                             closeHour: e.target.value,
                                         })
                                     }
-                                    className="flex-1 px-2 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none bg-white text-center font-mono cursor-pointer"
+                                    className="flex-1 px-2 py-2 border rounded-lg outline-none bg-white text-center font-mono cursor-pointer"
                                 >
                                     {hours.map((h) => (
                                         <option key={`ch-${h}`} value={h}>
@@ -491,7 +464,7 @@ function SettingsPage({ settings, onSave }) {
                                             closeMinute: e.target.value,
                                         })
                                     }
-                                    className="flex-1 px-2 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none bg-white text-center font-mono cursor-pointer"
+                                    className="flex-1 px-2 py-2 border rounded-lg outline-none bg-white text-center font-mono cursor-pointer"
                                 >
                                     {minutes.map((m) => (
                                         <option key={`cm-${m}`} value={m}>
@@ -504,7 +477,6 @@ function SettingsPage({ settings, onSave }) {
                     </div>
                 </div>
 
-                {/* WhatsApp Number */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                         <Phone size={16} /> {t.whatsappNumber}
@@ -518,14 +490,8 @@ function SettingsPage({ settings, onSave }) {
                         className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
                         placeholder="628123456789"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                        {lang === "id"
-                            ? "Format: 628xxx (tanpa + atau 0)"
-                            : "Format: 628xxx (without + or 0)"}
-                    </p>
                 </div>
 
-                {/* Save Button */}
                 <button
                     onClick={handleSave}
                     style={{
@@ -585,14 +551,12 @@ function SettingsPage({ settings, onSave }) {
 // Dashboard Overview Page
 function DashboardOverview({ items }) {
     const { lang } = useLanguage();
-
     const totalItems = items.length;
     const totalViews = items.reduce((sum, item) => sum + (item.views || 0), 0);
     const totalRevenue = items.reduce(
         (sum, item) => sum + item.price * (item.views || 0) * 0.1,
         0
     );
-    // Estimate
     const avgPrice =
         items.length > 0
             ? items.reduce((sum, item) => sum + item.price, 0) / items.length
@@ -602,9 +566,9 @@ function DashboardOverview({ items }) {
     const topItems = [...items]
         .sort((a, b) => (b.views || 0) - (a.views || 0))
         .slice(0, 5);
+
     return (
         <div className="space-y-6">
-            {/* Stats Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                     icon={Package}
@@ -634,7 +598,6 @@ function DashboardOverview({ items }) {
                 />
             </div>
 
-            {/* Top Items */}
             <div className="bg-white rounded-xl border p-4">
                 <h3 className="font-semibold mb-4 flex items-center gap-2">
                     <TrendingUp size={18} className="text-[#666fb8]" />
@@ -717,6 +680,7 @@ export function AdminDashboard() {
     const [modal, setModal] = useState(null);
     const [editingItem, setEditingItem] = useState(null);
     const [notification, setNotification] = useState("");
+    const [modalAlert, setModalAlert] = useState(null); // --- STATE ALERT MODAL ---
 
     const menuSlug =
         settings.storeName
@@ -733,6 +697,7 @@ export function AdminDashboard() {
             coordinateGetter: sortableKeyboardCoordinates,
         })
     );
+
     const showNotif = (msg) => {
         setNotification(msg);
         setTimeout(() => setNotification(""), 2500);
@@ -741,21 +706,45 @@ export function AdminDashboard() {
         await navigator.clipboard.writeText(menuLink);
         showNotif(t.linkCopied);
     };
+
+    // --- LOGIC SAVE DENGAN MODAL ALERT ---
     const handleSaveItem = async (formData) => {
         try {
             if (editingItem) {
                 await updateItem(editingItem.id, formData);
-                showNotif(t.itemUpdated);
-                setEditingItem(null);
+                setModalAlert({
+                    type: "success",
+                    message:
+                        lang === "id"
+                            ? "Menu berhasil diperbarui!"
+                            : "Menu updated successfully!",
+                });
             } else {
                 await addItem(formData);
-                showNotif(t.itemAdded);
-                setModal(null);
+                setModalAlert({
+                    type: "success",
+                    message:
+                        lang === "id"
+                            ? "Menu baru ditambahkan!"
+                            : "New menu added!",
+                });
             }
+
+            // Delay tutup modal biar user lihat centang hijau
+            setTimeout(() => {
+                setModal(null);
+                setEditingItem(null);
+                setModalAlert(null); // Reset alert
+            }, 1500);
         } catch (err) {
             console.error("Save failed:", err);
+            setModalAlert({
+                type: "error",
+                message: lang === "id" ? "Gagal menyimpan." : "Failed to save.",
+            });
         }
     };
+
     const handleDelete = async (id) => {
         if (window.confirm(t.confirmDelete)) {
             await deleteItem(id);
@@ -783,7 +772,6 @@ export function AdminDashboard() {
 
     return (
         <div className="min-h-screen bg-gray-50 flex">
-            {/* Sidebar */}
             <Sidebar
                 isOpen={sidebarOpen}
                 onClose={() => setSidebarOpen(false)}
@@ -791,13 +779,10 @@ export function AdminDashboard() {
                 onNavigate={setCurrentPage}
             />
 
-            {/* Main Content */}
             <div className="flex-1 flex flex-col min-h-screen">
-                {/* Top Bar */}
                 <header className="bg-white border-b sticky top-0 z-30">
                     <div className="px-4 py-3 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            {/* Burger Menu - Mobile Only */}
                             <button
                                 onClick={() => setSidebarOpen(true)}
                                 className="p-2 hover:bg-gray-100 rounded-lg lg:hidden"
@@ -815,7 +800,6 @@ export function AdminDashboard() {
                                     (lang === "id" ? "Pengaturan" : "Settings")}
                             </h2>
                         </div>
-
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={toggleLang}
@@ -835,28 +819,22 @@ export function AdminDashboard() {
                     </div>
                 </header>
 
-                {/* Notification */}
                 {notification && (
-                    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#666fb8]  text-white px-4 py-2 rounded-lg shadow-lg text-sm animate-slideDown">
+                    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#666fb8] text-white px-4 py-2 rounded-lg shadow-lg text-sm animate-slideDown">
                         {notification}
                     </div>
                 )}
 
-                {/* Page Content */}
                 <main className="flex-1 p-4 lg:p-6">
-                    {/* Dashboard Page */}
                     {currentPage === "dashboard" && (
                         <DashboardOverview items={items} />
                     )}
-
-                    {/* Menu Management Page */}
                     {currentPage === "menu" && (
                         <div className="space-y-4">
-                            {/* Actions */}
                             <div className="flex flex-wrap gap-2">
                                 <button
                                     onClick={() => setModal("add")}
-                                    className="flex items-center gap-2 px-4 py-2 bg-[#666fb8]  text-white rounded-lg hover:bg-[#333fa1]  text-sm font-medium"
+                                    className="flex items-center gap-2 px-4 py-2 bg-[#666fb8] text-white rounded-lg hover:bg-[#333fa1] text-sm font-medium"
                                 >
                                     <Plus size={16} />
                                     {t.addItem}
@@ -876,8 +854,6 @@ export function AdminDashboard() {
                                     {t.copyLink}
                                 </button>
                             </div>
-
-                            {/* Menu Grid */}
                             <div className="flex items-center justify-between">
                                 <h3 className="font-medium">
                                     {t.menuItems} ({items.length})
@@ -886,7 +862,6 @@ export function AdminDashboard() {
                                     {t.dragToReorder}
                                 </p>
                             </div>
-
                             {items.length === 0 ? (
                                 <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed">
                                     <Package
@@ -931,8 +906,6 @@ export function AdminDashboard() {
                             )}
                         </div>
                     )}
-
-                    {/* Settings Page */}
                     {currentPage === "settings" && (
                         <SettingsPage
                             settings={settings}
@@ -942,11 +915,14 @@ export function AdminDashboard() {
                 </main>
             </div>
 
-            {/* Modals */}
             <Modal
                 isOpen={modal === "add"}
-                onClose={() => setModal(null)}
+                onClose={() => {
+                    setModal(null);
+                    setModalAlert(null);
+                }}
                 title={t.addItem}
+                alert={modalAlert}
             >
                 <ItemForm
                     customCategories={customCategories}
@@ -962,8 +938,10 @@ export function AdminDashboard() {
                 onClose={() => {
                     setModal(null);
                     setEditingItem(null);
+                    setModalAlert(null);
                 }}
                 title={t.editItem}
+                alert={modalAlert}
             >
                 {editingItem && (
                     <ItemForm

@@ -1,401 +1,430 @@
 import React, { useState } from "react";
 import {
-  Upload,
-  X,
-  Image as ImageIcon,
-  Loader2,
-  Plus,
-  Check,
+    Upload,
+    X,
+    Image as ImageIcon,
+    Loader2,
+    Plus,
+    Check,
+    DollarSign,
+    AlignLeft,
+    Tag,
+    Type,
 } from "lucide-react";
 import { useLanguage } from "../contexts/LanguageContext";
+import { useTemplate } from "../contexts/TemplateContext"; // Import Theme Context
 
 const DEFAULT_CATEGORIES = ["food", "drink", "snack", "dessert", "other"];
 
 export function ItemForm({
-  item,
-  onSave,
-  onCancel,
-  onUploadPhoto,
-  customCategories = [],
-  addCustomCategory,
+    item,
+    onSave,
+    onCancel,
+    onUploadPhoto,
+    customCategories = [],
+    addCustomCategory,
 }) {
-  const { t } = useLanguage();
+    const { t } = useLanguage();
+    const { theme } = useTemplate(); // Ambil tema dinamis
 
-  const [form, setForm] = useState({
-    name: item?.name || "",
-    price: item?.price || "",
-    description: item?.description || "",
-    category: item?.category || "food",
-    photo: item?.photo || "",
-  });
-
-  const [uploading, setUploading] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [uploadError, setUploadError] = useState("");
-  const [showCategoryInput, setShowCategoryInput] = useState(false);
-  const [newCategory, setNewCategory] = useState("");
-
-  // Combine default and custom categories
-  const allCategories = [...DEFAULT_CATEGORIES, ...customCategories];
-
-  const handleChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: null }));
-    }
-  };
-
-  const handlePhotoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadError("");
-
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      setUploadError(
-        "Format file tidak didukung. Gunakan JPG, PNG, GIF, atau WebP."
-      );
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError("Ukuran file terlalu besar. Maksimal 5MB.");
-      return;
-    }
-
-    if (onUploadPhoto) {
-      setUploading(true);
-      try {
-        const result = await onUploadPhoto(file);
-        setForm((prev) => ({ ...prev, photo: result.url }));
-        setUploadError("");
-      } catch (err) {
-        setUploadError(err.message || "Upload gagal. Silakan coba lagi.");
-      } finally {
-        setUploading(false);
-      }
-    }
-
-    e.target.value = "";
-  };
-
-  const handleRemovePhoto = () => {
-    setForm((prev) => ({ ...prev, photo: "" }));
-    setUploadError("");
-  };
-
-  const handleAddCustomCategory = () => {
-    const trimmed = newCategory.trim().toLowerCase();
-
-    if (!trimmed) {
-      alert("Nama kategori tidak boleh kosong");
-      return;
-    }
-
-    if (trimmed.length < 2) {
-      alert("Nama kategori minimal 2 karakter");
-      return;
-    }
-
-    if (trimmed.length > 20) {
-      alert("Nama kategori maksimal 20 karakter");
-      return;
-    }
-
-    if (allCategories.includes(trimmed)) {
-      alert("Kategori sudah ada");
-      return;
-    }
-
-    if (!/^[a-z0-9\s-]+$/.test(trimmed)) {
-      alert(
-        "Kategori hanya boleh berisi huruf, angka, spasi, dan tanda hubung"
-      );
-      return;
-    }
-
-    // Add via parent component
-    if (addCustomCategory) {
-      const success = addCustomCategory(trimmed);
-      if (success) {
-        handleChange("category", trimmed);
-        setNewCategory("");
-        setShowCategoryInput(false);
-      }
-    } else {
-      // Fallback if parent doesn't provide the function
-      handleChange("category", trimmed);
-      setNewCategory("");
-      setShowCategoryInput(false);
-    }
-  };
-
-  const validate = () => {
-    const newErrors = {};
-
-    if (!form.name.trim()) {
-      newErrors.name = "Nama wajib diisi";
-    }
-
-    if (!form.price || Number(form.price) <= 0) {
-      newErrors.price = "Harga harus lebih dari 0";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = () => {
-    if (!validate()) return;
-
-    onSave({
-      name: form.name.trim(),
-      price: Number(form.price),
-      description: form.description.trim(),
-      category: form.category,
-      photo: form.photo,
+    const [form, setForm] = useState({
+        name: item?.name || "",
+        price: item?.price || "",
+        description: item?.description || "",
+        category: item?.category || "food",
+        photo: item?.photo || "",
     });
-  };
 
-  return (
-    <div className="space-y-4">
-      {/* Name */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {t.name} <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          value={form.name}
-          onChange={(e) => handleChange("name", e.target.value)}
-          className={`w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
-            errors.name ? "border-red-500 bg-red-50" : "border-gray-300"
-          }`}
-          placeholder="Contoh: Nasi Goreng Spesial"
-        />
-        {errors.name && (
-          <p className="text-red-500 text-xs mt-1">{errors.name}</p>
-        )}
-      </div>
+    const [uploading, setUploading] = useState(false);
+    const [errors, setErrors] = useState({});
+    const [uploadError, setUploadError] = useState("");
+    const [showCategoryInput, setShowCategoryInput] = useState(false);
+    const [newCategory, setNewCategory] = useState("");
 
-      {/* Price */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {t.price} (Rp) <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="number"
-          value={form.price}
-          onChange={(e) => handleChange("price", e.target.value)}
-          className={`w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all ${
-            errors.price ? "border-red-500 bg-red-50" : "border-gray-300"
-          }`}
-          placeholder="25000"
-          min="0"
-        />
-        {errors.price && (
-          <p className="text-red-500 text-xs mt-1">{errors.price}</p>
-        )}
-      </div>
+    const allCategories = [...DEFAULT_CATEGORIES, ...customCategories];
 
-      {/* Description */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {t.description}
-        </label>
-        <textarea
-          value={form.description}
-          onChange={(e) => handleChange("description", e.target.value)}
-          rows={2}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-none transition-all"
-          placeholder="Deskripsi singkat menu..."
-        />
-      </div>
+    const handleChange = (field, value) => {
+        setForm((prev) => ({ ...prev, [field]: value }));
+        if (errors[field]) {
+            setErrors((prev) => ({ ...prev, [field]: null }));
+        }
+    };
 
-      {/* Category */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {t.category}
-        </label>
-        <div className="flex gap-2">
-          <select
-            value={form.category}
-            onChange={(e) => handleChange("category", e.target.value)}
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-          >
-            {allCategories.map((cat) => (
-              <option key={cat} value={cat}>
-                {t[cat] || cat.charAt(0).toUpperCase() + cat.slice(1)}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => setShowCategoryInput(!showCategoryInput)}
-            className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            title="Tambah kategori baru"
-          >
-            <Plus
-              size={18}
-              className={
-                showCategoryInput
-                  ? "rotate-45 transition-transform"
-                  : "transition-transform"
-              }
-            />
-          </button>
-        </div>
+    const handlePhotoUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
 
-        {showCategoryInput && (
-          <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
-            <p className="text-xs text-blue-700 font-medium">
-              Tambah Kategori Baru
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddCustomCategory();
-                  }
-                }}
-                placeholder="Nama kategori (contoh: seafood)"
-                className="flex-1 px-3 py-2 text-sm border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
-                maxLength={20}
-              />
-              <button
-                type="button"
-                onClick={handleAddCustomCategory}
-                disabled={!newCategory.trim()}
-                className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <Check size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCategoryInput(false);
-                  setNewCategory("");
-                }}
-                className="px-3 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <X size={16} />
-              </button>
+        setUploadError("");
+        const allowedTypes = [
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+        ];
+
+        if (!allowedTypes.includes(file.type)) {
+            setUploadError(
+                "Format file tidak didukung. Gunakan JPG, PNG, GIF, atau WebP."
+            );
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            setUploadError("Ukuran file terlalu besar. Maksimal 5MB.");
+            return;
+        }
+
+        if (onUploadPhoto) {
+            setUploading(true);
+            try {
+                const result = await onUploadPhoto(file);
+                setForm((prev) => ({ ...prev, photo: result.url }));
+                setUploadError("");
+            } catch (err) {
+                setUploadError(
+                    err.message || "Upload gagal. Silakan coba lagi."
+                );
+            } finally {
+                setUploading(false);
+            }
+        }
+        e.target.value = "";
+    };
+
+    const handleRemovePhoto = () => {
+        setForm((prev) => ({ ...prev, photo: "" }));
+        setUploadError("");
+    };
+
+    const handleAddCustomCategory = () => {
+        const trimmed = newCategory.trim().toLowerCase();
+        if (!trimmed || trimmed.length < 2 || trimmed.length > 20) return;
+
+        if (addCustomCategory) {
+            const success = addCustomCategory(trimmed);
+            if (success) {
+                handleChange("category", trimmed);
+                setNewCategory("");
+                setShowCategoryInput(false);
+            }
+        } else {
+            handleChange("category", trimmed);
+            setNewCategory("");
+            setShowCategoryInput(false);
+        }
+    };
+
+    const validate = () => {
+        const newErrors = {};
+        if (!form.name.trim()) newErrors.name = "Nama wajib diisi";
+        if (!form.price || Number(form.price) <= 0)
+            newErrors.price = "Harga harus valid";
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleSubmit = () => {
+        if (!validate()) return;
+        onSave({
+            name: form.name.trim(),
+            price: Number(form.price),
+            description: form.description.trim(),
+            category: form.category,
+            photo: form.photo,
+        });
+    };
+
+    // Style Helper untuk Input yang Fokus
+    const focusStyle = {
+        borderColor: theme?.primary || "#3b82f6",
+        boxShadow: `0 0 0 4px ${theme?.primary}1A`, // 10% opacity color
+    };
+
+    return (
+        <div className="space-y-5">
+            {/* 1. PHOTO UPLOAD SECTION */}
+            <div className="flex justify-center">
+                {form.photo ? (
+                    <div className="relative group">
+                        <img
+                            src={form.photo}
+                            alt="Preview"
+                            className="w-full h-48 object-cover rounded-2xl shadow-sm border border-gray-100"
+                            onError={(e) => {
+                                e.target.src =
+                                    "https://placehold.co/400x300?text=Error";
+                            }}
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl flex items-center justify-center">
+                            <button
+                                type="button"
+                                onClick={handleRemovePhoto}
+                                className="bg-red-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg hover:bg-red-600 transition-transform transform hover:scale-105"
+                            >
+                                Hapus Foto
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <label
+                        className={`w-full h-40 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group ${
+                            uploading
+                                ? "bg-gray-50 opacity-50"
+                                : "hover:bg-gray-50 hover:border-gray-400"
+                        }`}
+                        style={{
+                            borderColor: uploading ? "#e5e7eb" : undefined,
+                        }}
+                    >
+                        {uploading ? (
+                            <>
+                                <Loader2
+                                    size={32}
+                                    className="animate-spin text-gray-400 mb-2"
+                                />
+                                <span className="text-sm text-gray-500">
+                                    Mengupload...
+                                </span>
+                            </>
+                        ) : (
+                            <>
+                                <div className="p-3 bg-gray-100 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                                    <Upload
+                                        size={24}
+                                        className="text-gray-500"
+                                    />
+                                </div>
+                                <span className="text-sm font-medium text-gray-600">
+                                    Klik untuk upload foto
+                                </span>
+                                <span className="text-xs text-gray-400 mt-1">
+                                    JPG, PNG, WEBP (Max 5MB)
+                                </span>
+                            </>
+                        )}
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handlePhotoUpload}
+                            className="hidden"
+                            disabled={uploading}
+                        />
+                    </label>
+                )}
+                {uploadError && (
+                    <p className="text-red-500 text-xs mt-2 text-center">
+                        {uploadError}
+                    </p>
+                )}
             </div>
-            <p className="text-xs text-gray-500">
-              Huruf kecil, angka, spasi, dan tanda hubung. Min 2, max 20
-              karakter.
-            </p>
-          </div>
-        )}
-      </div>
 
-      {/* Photo Upload */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          {t.photo}
-        </label>
+            {/* 2. FORM FIELDS */}
+            <div className="space-y-4">
+                {/* Name */}
+                <div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block ml-1">
+                        {t.name}
+                    </label>
+                    <div className="relative">
+                        <Type
+                            size={18}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                        />
+                        <input
+                            type="text"
+                            value={form.name}
+                            onChange={(e) =>
+                                handleChange("name", e.target.value)
+                            }
+                            className={`w-full pl-10 pr-4 py-3 border rounded-xl outline-none transition-all ${
+                                errors.name
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-gray-200 bg-gray-50 focus:bg-white"
+                            }`}
+                            style={{
+                                ...(errors.name
+                                    ? {}
+                                    : { ":focus": focusStyle }),
+                            }} // Note: inline focus style is tricky, relies on class logic usually.
+                            // Simple workaround for focus color:
+                            onFocus={(e) =>
+                                (e.target.style.borderColor = theme?.primary)
+                            }
+                            onBlur={(e) =>
+                                (e.target.style.borderColor = errors.name
+                                    ? "#ef4444"
+                                    : "#e5e7eb")
+                            }
+                            placeholder="Contoh: Nasi Goreng Spesial"
+                        />
+                    </div>
+                    {errors.name && (
+                        <p className="text-red-500 text-xs mt-1 ml-1">
+                            {errors.name}
+                        </p>
+                    )}
+                </div>
 
-        {form.photo && (
-          <div className="relative inline-block mb-3">
-            <img
-              src={form.photo}
-              alt="Preview"
-              className="w-32 h-32 object-cover rounded-lg border shadow-sm"
-              onError={(e) => {
-                e.target.src = "https://via.placeholder.com/128?text=Error";
-              }}
-            />
-            <button
-              type="button"
-              onClick={handleRemovePhoto}
-              className="absolute -top-2 -right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-md transition-colors"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        )}
+                {/* Price & Category Row */}
+                <div className="grid grid-cols-2 gap-4">
+                    {/* Price */}
+                    <div>
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block ml-1">
+                            {t.price}
+                        </label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold text-sm">
+                                Rp
+                            </span>
+                            <input
+                                type="number"
+                                value={form.price}
+                                onChange={(e) =>
+                                    handleChange("price", e.target.value)
+                                }
+                                className={`w-full pl-10 pr-4 py-3 border rounded-xl outline-none transition-all ${
+                                    errors.price
+                                        ? "border-red-500 bg-red-50"
+                                        : "border-gray-200 bg-gray-50 focus:bg-white"
+                                }`}
+                                onFocus={(e) =>
+                                    (e.target.style.borderColor =
+                                        theme?.primary)
+                                }
+                                onBlur={(e) =>
+                                    (e.target.style.borderColor = errors.price
+                                        ? "#ef4444"
+                                        : "#e5e7eb")
+                                }
+                                placeholder="0"
+                                min="0"
+                            />
+                        </div>
+                    </div>
 
-        {!form.photo && (
-          <label
-            className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-all ${
-              uploading ? "opacity-50 pointer-events-none bg-gray-50" : ""
-            }`}
-          >
-            {uploading ? (
-              <div className="flex flex-col items-center">
-                <Loader2
-                  size={32}
-                  className="text-blue-500 animate-spin mb-2"
-                />
-                <span className="text-sm text-gray-500">Mengupload...</span>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center">
-                <Upload size={32} className="text-gray-400 mb-2" />
-                <span className="text-sm text-gray-600 font-medium">
-                  Klik untuk upload foto
-                </span>
-                <span className="text-xs text-gray-400 mt-1">
-                  JPG, PNG, GIF, WebP (max 5MB)
-                </span>
-              </div>
-            )}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-              onChange={handlePhotoUpload}
-              className="hidden"
-              disabled={uploading}
-            />
-          </label>
-        )}
+                    {/* Category */}
+                    <div>
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block ml-1">
+                            {t.category}
+                        </label>
+                        <div className="relative">
+                            <Tag
+                                size={18}
+                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                            />
+                            <select
+                                value={form.category}
+                                onChange={(e) =>
+                                    handleChange("category", e.target.value)
+                                }
+                                className="w-full pl-10 pr-8 py-3 border border-gray-200 bg-gray-50 rounded-xl outline-none appearance-none cursor-pointer focus:bg-white transition-all"
+                                onFocus={(e) =>
+                                    (e.target.style.borderColor =
+                                        theme?.primary)
+                                }
+                                onBlur={(e) =>
+                                    (e.target.style.borderColor = "#e5e7eb")
+                                }
+                            >
+                                {allCategories.map((cat) => (
+                                    <option key={cat} value={cat}>
+                                        {t[cat] ||
+                                            cat.charAt(0).toUpperCase() +
+                                                cat.slice(1)}
+                                    </option>
+                                ))}
+                            </select>
+                            {/* Add Category Button (Small) */}
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setShowCategoryInput(!showCategoryInput)
+                                }
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded-md text-gray-500"
+                                title="Tambah Kategori"
+                            >
+                                <Plus size={16} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
-        {uploadError && (
-          <p className="text-red-500 text-xs mt-2 flex items-center gap-1">
-            <X size={12} />
-            {uploadError}
-          </p>
-        )}
+                {/* New Category Input */}
+                {showCategoryInput && (
+                    <div className="p-3 bg-gray-50 border border-dashed border-gray-300 rounded-xl flex gap-2 animate-fadeIn">
+                        <input
+                            type="text"
+                            value={newCategory}
+                            onChange={(e) => setNewCategory(e.target.value)}
+                            placeholder="Nama kategori baru..."
+                            className="flex-1 px-3 py-2 text-sm border rounded-lg outline-none focus:border-blue-500"
+                        />
+                        <button
+                            type="button"
+                            onClick={handleAddCustomCategory}
+                            disabled={!newCategory.trim()}
+                            className="px-3 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50"
+                        >
+                            <Check size={16} />
+                        </button>
+                    </div>
+                )}
 
-        <div className="mt-3">
-          <p className="text-xs text-gray-500 mb-1">Atau masukkan URL foto:</p>
-          <input
-            type="text"
-            value={form.photo}
-            onChange={(e) => handleChange("photo", e.target.value)}
-            placeholder="https://example.com/photo.jpg"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition-all"
-          />
+                {/* Description */}
+                <div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block ml-1">
+                        {t.description}
+                    </label>
+                    <div className="relative">
+                        <AlignLeft
+                            size={18}
+                            className="absolute left-3 top-4 text-gray-400"
+                        />
+                        <textarea
+                            value={form.description}
+                            onChange={(e) =>
+                                handleChange("description", e.target.value)
+                            }
+                            rows={3}
+                            className="w-full pl-10 pr-4 py-3 border border-gray-200 bg-gray-50 rounded-xl outline-none focus:bg-white resize-none transition-all"
+                            onFocus={(e) =>
+                                (e.target.style.borderColor = theme?.primary)
+                            }
+                            onBlur={(e) =>
+                                (e.target.style.borderColor = "#e5e7eb")
+                            }
+                            placeholder="Jelaskan detail menu ini..."
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* 3. ACTION BUTTONS */}
+            <div className="flex gap-3 pt-2">
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    className="flex-1 px-4 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+                >
+                    {t.cancel}
+                </button>
+                <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={uploading}
+                    className="flex-1 px-4 py-3 text-white rounded-xl font-medium shadow-md hover:opacity-90 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
+                    style={{ background: theme?.buttonBg || "#666fb8" }}
+                >
+                    {uploading ? (
+                        <Loader2 size={20} className="animate-spin" />
+                    ) : (
+                        <Check size={20} />
+                    )}
+                    {uploading ? "Processing..." : t.save}
+                </button>
+            </div>
         </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex gap-3 pt-4 border-t">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-        >
-          {t.cancel}
-        </button>
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={uploading}
-          className={`flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium transition-colors ${
-            uploading ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"
-          }`}
-        >
-          {uploading ? "Mengupload..." : t.save}
-        </button>
-      </div>
-    </div>
-  );
+    );
 }
 
 export default ItemForm;
