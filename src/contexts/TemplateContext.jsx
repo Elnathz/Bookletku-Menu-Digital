@@ -1,100 +1,116 @@
-// File baru: src/contexts/TemplateContext.jsx
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, {
+    createContext,
+    useContext,
+    useState,
+    useEffect,
+    useMemo,
+} from "react";
 
 const TemplateContext = createContext();
 
 export function TemplateProvider({ children }) {
-  const [template, setTemplate] = useState(() => {
-    const saved = localStorage.getItem("bookletku-template");
-    return saved || "minimalist";
-  });
+    // Load settings from localStorage
+    const [themeConfig, setThemeConfig] = useState(() => {
+        const saved = localStorage.getItem("bookletku-theme");
+        return saved
+            ? JSON.parse(saved)
+            : { mode: "minimalist", color: "#666fb8" };
+    });
 
-  useEffect(() => {
-    localStorage.setItem("bookletku-template", template);
-  }, [template]);
+    useEffect(() => {
+        localStorage.setItem("bookletku-theme", JSON.stringify(themeConfig));
+    }, [themeConfig]);
 
-  // Template configurations
-  const templates = {
-    minimalist: {
-      id: "minimalist",
-      name: "Minimalist",
-      colors: {
-        primary: "green",
-        secondary: "emerald",
-        gradient: "from-[#333fa1] to-[#000f89]",
-        button: "bg-[#666fb8]  hover:bg-[#666fb8] ",
-        buttonText: "text-white",
-        badge: "bg-green-100 text-[#333fa1]",
-      },
-    },
-    colorful: {
-      id: "colorful",
-      name: "Colorful",
-      colors: {
-        primary: "purple",
-        secondary: "pink",
-        gradient: "from-purple-600 to-pink-600",
-        button: "bg-purple-500 hover:bg-purple-600",
-        buttonText: "text-white",
-        badge: "bg-purple-100 text-purple-700",
-      },
-    },
-  };
+    // Generate dynamic styles based on config
+    const theme = useMemo(() => {
+        const { mode, color } = themeConfig;
 
-  const currentTemplate = templates[template] || templates.minimalist;
+        if (mode === "colorful") {
+            return {
+                // --- PRESET COLORFUL (Lebih Hidup) ---
+                name: "Colorful",
+                // Warna dasar untuk border/text biasa
+                primary: "#8b5cf6", // Violet-500
 
-  const value = {
-    template,
-    setTemplate,
-    currentTemplate,
-    templates,
-  };
+                // Background Header (Gradient)
+                bgGradient: "linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)", // Violet to Pink
 
-  return (
-    <TemplateContext.Provider value={value}>
-      {children}
-    </TemplateContext.Provider>
-  );
+                // Background Tombol Utama & Kategori Aktif (Gradient)
+                buttonBg: "linear-gradient(to right, #8b5cf6, #ec4899)",
+
+                // Warna Teks Harga (Pink cerah agar kontras)
+                priceColor: "#db2777", // Pink-600
+
+                // Warna Ikon-ikon (Violet cerah)
+                iconColor: "#7c3aed", // Violet-600
+
+                // Focus ring untuk input (Pink)
+                focusRing: "#ec4899",
+
+                // Badge (Label Trending/Popular)
+                badgeBg:
+                    "bg-gradient-to-r from-purple-500 to-pink-500 text-white",
+            };
+        } else {
+            // --- PRESET MINIMALIST (Satu Warna Dominan) ---
+            return {
+                name: "Minimalist",
+                primary: color,
+
+                // Header Gradient (Warna utama ke sedikit lebih gelap)
+                bgGradient: `linear-gradient(135deg, ${color} 0%, ${adjustColor(
+                    color,
+                    -20
+                )} 100%)`,
+
+                // Tombol solid (Warna utama)
+                buttonBg: color,
+
+                // Harga mengikuti warna utama
+                priceColor: color,
+
+                // Ikon mengikuti warna utama
+                iconColor: color,
+
+                // Focus ring mengikuti warna utama
+                focusRing: color,
+
+                badgeBg: "bg-gray-100 text-gray-700",
+            };
+        }
+    }, [themeConfig]);
+
+    const updateTheme = (key, value) => {
+        setThemeConfig((prev) => ({ ...prev, [key]: value }));
+    };
+
+    return (
+        <TemplateContext.Provider value={{ themeConfig, updateTheme, theme }}>
+            {children}
+        </TemplateContext.Provider>
+    );
+}
+
+// Helper to darken/lighten hex color
+function adjustColor(color, amount) {
+    return (
+        "#" +
+        color
+            .replace(/^#/, "")
+            .replace(/../g, (color) =>
+                (
+                    "0" +
+                    Math.min(
+                        255,
+                        Math.max(0, parseInt(color, 16) + amount)
+                    ).toString(16)
+                ).substr(-2)
+            )
+    );
 }
 
 export function useTemplate() {
-  const context = useContext(TemplateContext);
-  if (!context) {
-    throw new Error("useTemplate must be used within a TemplateProvider");
-  }
-  return context;
+    return useContext(TemplateContext);
 }
 
 export default TemplateContext;
-
-// ===============================================
-// Update PublicMenu.jsx - Gunakan template colors
-// ===============================================
-/*
-// Di bagian atas component PublicMenu, tambah:
-import { useTemplate } from "../contexts/TemplateContext";
-
-// Di dalam component:
-const { currentTemplate } = useTemplate();
-const colors = currentTemplate.colors;
-
-// Ganti semua class warna hijau dengan variable colors:
-// Contoh:
-// BEFORE: className="bg-gradient-to-r from-[#333fa1] to-[#000f89]"
-// AFTER:  className={`bg-gradient-to-r ${colors.gradient}`}
-
-// ===============================================
-// Update AdminDashboard Settings - Simpan template
-// ===============================================
-/*
-import { useTemplate } from "../contexts/TemplateContext";
-
-// Di dalam AdminDashboard atau SettingsPage:
-const { setTemplate } = useTemplate();
-
-// Saat save settings:
-const handleSaveSettings = (newSettings) => {
-    setSettings(newSettings);
-    setTemplate(newSettings.template); // Terapkan template
-};
-*/
