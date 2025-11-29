@@ -13,6 +13,9 @@ import {
   Package as PackageIcon,
   Truck,
   Globe,
+  User,       // Ditambahkan
+  LogIn,      // Ditambahkan
+  Settings,   // Ditambahkan
 } from "lucide-react";
 
 import { useLanguage } from "../contexts/LanguageContext";
@@ -23,6 +26,7 @@ import Toast from "./Toast";
 /*
   PublicMenu - Blue themed + Dine-in / Takeaway / Delivery
   Layout: Large image cards (A)
+  Update: Header Profile Dropdown Logic
 */
 
 const DEFAULT_CATEGORIES = [
@@ -332,8 +336,7 @@ function OrderTypeModal({ isOpen, onClose, onSelect }) {
 
 export default function PublicMenu() {
   const { items = [], settings = {}, loading, updateItem } = useSupabase();
-  const { user } = useAuth();
-  // include toggleLang to switch language
+  const { user, isAuthenticated, isAdmin } = useAuth(); // Ambil isAdmin dan isAuthenticated
   const { t = {}, lang, toggleLang } = useLanguage();
   const navigate = useNavigate();
 
@@ -347,6 +350,7 @@ export default function PublicMenu() {
   const [selectedOrderType, setSelectedOrderType] = useState(null);
   const [showStoreDetails, setShowStoreDetails] = useState(false);
   const [toast, setToast] = useState(null);
+  const [showUserMenu, setShowUserMenu] = useState(false); // State untuk dropdown profil
 
   // Helpful derived values
   const categories = useMemo(() => {
@@ -535,16 +539,74 @@ export default function PublicMenu() {
               </span>
             </button>
 
-            {/* Login/Profile (kept as requested) */}
-            <button
-              onClick={() => navigate("/login")}
-              className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-white hover:bg-gray-50"
-            >
-              <UserIconFallback />
-              <span className="text-sm">
-                {user ? t?.profile || "Profile" : t?.login || "Login"}
-              </span>
-            </button>
+            {/* DROPDOWN MENU PROFIL (Menggantikan tombol profil lama) */}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="p-2 hover:bg-gray-100 rounded-md"
+                title={user ? (t?.profile || "Profile") : (t?.login || "Login")}
+              >
+                <User size={20} className="text-gray-600" />
+              </button>
+
+              {showUserMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowUserMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border z-50 overflow-hidden">
+                    {user ? (
+                      <>
+                        <div className="p-3 border-b bg-gray-50">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {user?.email}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {isAdmin ? "Admin" : "User"}
+                          </p>
+                        </div>
+                        {isAdmin && (
+                          <button
+                            onClick={() => {
+                              navigate("/admin");
+                              setShowUserMenu(false);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                          >
+                            <Settings size={16} />
+                            {lang === "id"
+                              ? "Dashboard Admin"
+                              : "Admin Dashboard"}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            navigate("/profile");
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                        >
+                          <User size={16} />
+                          {lang === "id" ? "Profil Saya" : "My Profile"}
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          navigate("/login");
+                          setShowUserMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                      >
+                        <LogIn size={16} />
+                        {lang === "id" ? "Masuk / Daftar" : "Login / Register"}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -561,7 +623,9 @@ export default function PublicMenu() {
               </div>
               <div>
                 <strong>WhatsApp:</strong>{" "}
-                {settings?.whatsappNumber ? `+${settings.whatsappNumber}` : "-"}
+                {settings?.whatsappNumber
+                  ? `+${settings.whatsappNumber}`
+                  : "-"}
               </div>
             </div>
           </div>
@@ -609,7 +673,8 @@ export default function PublicMenu() {
 
         {filteredGroups.length === 0 && !loading && (
           <div className="text-center py-16 text-gray-500">
-            {t?.noItems || (lang === "id" ? "Belum ada menu" : "No items yet")}
+            {t?.noItems ||
+              (lang === "id" ? "Belum ada menu" : "No items yet")}
           </div>
         )}
 
@@ -705,7 +770,9 @@ export default function PublicMenu() {
                     src={it.photo || "/placeholder.jpg"}
                     alt={it.name}
                     className="w-20 h-20 rounded-lg object-cover"
-                    onError={(e) => (e.currentTarget.src = "/placeholder.jpg")}
+                    onError={(e) =>
+                      (e.currentTarget.src = "/placeholder.jpg")
+                    }
                   />
                   <div className="flex-1">
                     <div className="flex items-start justify-between">
@@ -716,7 +783,9 @@ export default function PublicMenu() {
                     </div>
 
                     {it.note && (
-                      <p className="text-xs text-gray-400 mt-1">📝 {it.note}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        📝 {it.note}
+                      </p>
                     )}
 
                     <div className="flex items-center gap-2 mt-3">
@@ -751,7 +820,9 @@ export default function PublicMenu() {
               {cart.length === 0 && (
                 <p className="text-center text-gray-500 py-8">
                   {t?.noItemsInCart ||
-                    (lang === "id" ? "Keranjang kosong" : "Cart is empty")}
+                    (lang === "id"
+                      ? "Keranjang kosong"
+                      : "Cart is empty")}
                 </p>
               )}
             </div>
@@ -811,13 +882,4 @@ export default function PublicMenu() {
 function capitalize(s) {
   if (!s) return "";
   return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-// A tiny fallback user icon (keeps imports minimal in this file)
-function UserIconFallback() {
-  return (
-    <div className="w-6 h-6 rounded-full bg-[#666fb8] text-white flex items-center justify-center text-xs font-bold">
-      U
-    </div>
-  );
 }
