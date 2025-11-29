@@ -32,6 +32,8 @@ export function UserProfile() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  
+  // State untuk notifikasi
   const [toast, setToast] = useState({ message: "", type: "" });
 
   // Mock order history
@@ -98,7 +100,7 @@ export function UserProfile() {
 
       if (error) throw error;
 
-      // Update in user_profiles table
+      // Update in user_profiles table if exists
       await supabase
         .from("user_profiles")
         .update({ name: name.trim() })
@@ -168,6 +170,7 @@ export function UserProfile() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Komponen Toast yang Benar */}
       <Toast
         message={toast.message}
         type={toast.type}
@@ -202,19 +205,6 @@ export function UserProfile() {
           </div>
         </div>
       </div>
-
-      {/* Message Toast */}
-      {message.text && (
-        <div
-          className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg shadow-lg text-sm ${
-            message.type === "success"
-              ? "bg-[#666fb8]  text-white"
-              : "bg-red-500 text-white"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
 
       {/* Stats */}
       <div className="p-4 -mt-4">
@@ -289,7 +279,7 @@ export function UserProfile() {
                 </button>
                 <button
                   onClick={handleUpdateName}
-                  className="flex-1 px-3 py-2 bg-[#666fb8]  text-white rounded-lg hover:bg-[#666fb8]  text-sm disabled:opacity-50"
+                  className="flex-1 px-3 py-2 bg-[#666fb8] text-white rounded-lg hover:bg-[#555ea8] text-sm disabled:opacity-50"
                   disabled={loading}
                 >
                   <Save size={16} className="inline mr-1" />
@@ -336,7 +326,9 @@ export function UserProfile() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full pl-10 pr-10 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-[#666fb8]"
-                  placeholder={lang === "id" ? "Password baru" : "New password"}
+                  placeholder={
+                    lang === "id" ? "Password baru" : "New password"
+                  }
                   minLength={6}
                 />
                 <button
@@ -358,7 +350,9 @@ export function UserProfile() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-[#666fb8]"
                   placeholder={
-                    lang === "id" ? "Konfirmasi password" : "Confirm password"
+                    lang === "id"
+                      ? "Konfirmasi password"
+                      : "Confirm password"
                   }
                   minLength={6}
                 />
@@ -378,7 +372,7 @@ export function UserProfile() {
                 </button>
                 <button
                   onClick={handleUpdatePassword}
-                  className="flex-1 px-3 py-2 bg-[#666fb8]  text-white rounded-lg hover:bg-[#666fb8]  text-sm disabled:opacity-50"
+                  className="flex-1 px-3 py-2 bg-[#666fb8] text-white rounded-lg hover:bg-[#555ea8] text-sm disabled:opacity-50"
                   disabled={loading}
                 >
                   <Save size={16} className="inline mr-1" />
