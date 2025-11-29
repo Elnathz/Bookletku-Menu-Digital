@@ -34,15 +34,14 @@ import {
     Store,
     BarChart3,
 } from "lucide-react";
-
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useSupabase } from "../hooks/useSupabase";
+import { useTemplate } from "../contexts/TemplateContext"; // Import Template Context
 import Modal from "./Modal";
 import ItemForm from "./itemForm";
 import { MenuCard } from "./MenuCard";
 import QRCodeDisplay from "./QRCode";
-import { useTemplate } from "../contexts/TemplateContext";
 
 // Stat Card Component
 function StatCard({ icon: Icon, label, value, trend, color }) {
@@ -52,7 +51,6 @@ function StatCard({ icon: Icon, label, value, trend, color }) {
         purple: "bg-purple-500",
         orange: "bg-orange-500",
     };
-
     return (
         <div className="bg-white rounded-xl border p-4 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between">
@@ -77,7 +75,6 @@ function Sidebar({ isOpen, onClose, currentPage, onNavigate }) {
     const { t, lang } = useLanguage();
     const { signOut, user } = useAuth();
     const navigate = useNavigate();
-
     const menuItems = [
         {
             id: "dashboard",
@@ -205,19 +202,17 @@ function DashboardOverview({ items }) {
     const totalRevenue = items.reduce(
         (sum, item) => sum + item.price * (item.views || 0) * 0.1,
         0
-    ); // Estimate
+    );
+    // Estimate
     const avgPrice =
         items.length > 0
             ? items.reduce((sum, item) => sum + item.price, 0) / items.length
             : 0;
-
     const formatPrice = (p) =>
         new Intl.NumberFormat("id-ID").format(Math.round(p));
-
     const topItems = [...items]
         .sort((a, b) => (b.views || 0) - (a.views || 0))
         .slice(0, 5);
-
     return (
         <div className="space-y-6">
             {/* Stats Grid */}
@@ -314,7 +309,7 @@ function DashboardOverview({ items }) {
 // Settings Page
 function SettingsPage({ settings, onSave }) {
     const { t, lang, toggleLang } = useLanguage();
-    const { themeConfig, updateTheme } = useTemplate(); // Gunakan context template
+    const { themeConfig, updateTheme } = useTemplate(); // Use Template Context
 
     const [form, setForm] = useState({
         storeName: settings.storeName || "",
@@ -332,7 +327,7 @@ function SettingsPage({ settings, onSave }) {
 
     return (
         <div className="max-w-3xl mx-auto space-y-6">
-            {/* --- BAGIAN BARU: TAMPILAN WEB --- */}
+            {/* Web Appearance Settings */}
             <div className="bg-white rounded-xl border shadow-sm p-6 space-y-5">
                 <div className="text-center pb-4 border-b">
                     <h3 className="text-xl font-bold text-gray-900">
@@ -345,7 +340,6 @@ function SettingsPage({ settings, onSave }) {
                     </p>
                 </div>
 
-                {/* Pilihan Mode */}
                 <div className="grid grid-cols-2 gap-4">
                     <button
                         onClick={() => updateTheme("mode", "minimalist")}
@@ -377,7 +371,6 @@ function SettingsPage({ settings, onSave }) {
                     </button>
                 </div>
 
-                {/* Color Picker (Hanya muncul jika Minimalist) */}
                 {themeConfig.mode === "minimalist" && (
                     <div className="animate-fadeIn pt-2 border-t mt-2">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -414,7 +407,6 @@ function SettingsPage({ settings, onSave }) {
                     </div>
                 )}
             </div>
-            {/* --- END BAGIAN BARU --- */}
 
             {/* Store Information */}
             <div className="bg-white rounded-xl border shadow-sm p-6 space-y-5">
@@ -513,7 +505,6 @@ function SettingsPage({ settings, onSave }) {
                 {/* Save Button */}
                 <button
                     onClick={handleSave}
-                    // Dynamic Style agar admin bisa langsung lihat warna tombolnya berubah
                     style={{
                         background:
                             themeConfig.mode === "minimalist"
@@ -522,10 +513,10 @@ function SettingsPage({ settings, onSave }) {
                     }}
                     className={`w-full py-2 rounded-lg font-medium transition-colors text-white ${
                         saved
-                            ? "bg-green-600 hover:bg-green-700" // Saat saved, warnanya hijau fix
+                            ? "bg-green-600 hover:bg-green-700"
                             : themeConfig.mode === "colorful"
                             ? "bg-gradient-to-r from-violet-500 to-pink-500 hover:opacity-90"
-                            : "hover:opacity-90" // Untuk minimalist, warna diambil dari inline style
+                            : "hover:opacity-90"
                     }`}
                 >
                     {saved ? (lang === "id" ? "Tersimpan!" : "Saved!") : t.save}
@@ -569,7 +560,6 @@ function SettingsPage({ settings, onSave }) {
 export function AdminDashboard() {
     const { t, lang, toggleLang } = useLanguage();
     const navigate = useNavigate();
-
     const {
         items,
         settings,
@@ -583,7 +573,6 @@ export function AdminDashboard() {
         uploadPhoto,
         setSettings,
     } = useSupabase();
-
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState("dashboard");
     const [modal, setModal] = useState(null);
@@ -591,8 +580,13 @@ export function AdminDashboard() {
     const [notification, setNotification] = useState("");
 
     const menuSlug =
-        settings.storeName?.toLowerCase().replace(/\s+/g, "-") || "menu";
-    const menuLink = window.location.origin + "/menu/" + menuSlug;
+        settings.storeName
+            ?.toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/(^-|-$)/g, "") || "menu";
+    const baseUrl = window.location.origin;
+    const menuLink = `${baseUrl}/menu/${menuSlug}`;
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -600,7 +594,6 @@ export function AdminDashboard() {
             coordinateGetter: sortableKeyboardCoordinates,
         })
     );
-
     const showNotif = (msg) => {
         setNotification(msg);
         setTimeout(() => setNotification(""), 2500);
@@ -609,7 +602,6 @@ export function AdminDashboard() {
         await navigator.clipboard.writeText(menuLink);
         showNotif(t.linkCopied);
     };
-
     const handleSaveItem = async (formData) => {
         try {
             if (editingItem) {
@@ -625,7 +617,6 @@ export function AdminDashboard() {
             console.error("Save failed:", err);
         }
     };
-
     const handleDelete = async (id) => {
         if (window.confirm(t.confirmDelete)) {
             await deleteItem(id);
@@ -641,7 +632,6 @@ export function AdminDashboard() {
             reorderItems(arrayMove(items, oldIndex, newIndex));
         }
     };
-
     const sortedItems = [...items].sort((a, b) => a.order - b.order);
 
     if (loading) {
@@ -820,7 +810,7 @@ export function AdminDashboard() {
                 title={t.addItem}
             >
                 <ItemForm
-                    customCategories={customCategories} // ← PASS INI
+                    customCategories={customCategories}
                     addCustomCategory={addCustomCategory}
                     onSave={handleSaveItem}
                     onCancel={() => setModal(null)}
