@@ -1,20 +1,103 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
+import Cropper from "react-easy-crop"; // Pastikan library ini terinstall
 import {
     Upload,
     X,
-    Image as ImageIcon,
     Loader2,
     Plus,
     Check,
-    DollarSign,
-    AlignLeft,
-    Tag,
     Type,
+    Tag,
+    Star,
+    ZoomIn,
+    Maximize,
+    Image as ImageIcon,
 } from "lucide-react";
 import { useLanguage } from "../contexts/LanguageContext";
-import { useTemplate } from "../contexts/TemplateContext"; // Import Theme Context
+import { useTemplate } from "../contexts/TemplateContext";
+import Modal from "./Modal"; // Kita gunakan Modal yang sudah ada
+
+// --- UTILITY: CROP IMAGE ---
+const createImage = (url) =>
+    new Promise((resolve, reject) => {
+        const image = new Image();
+        image.addEventListener("load", () => resolve(image));
+        image.addEventListener("error", (error) => reject(error));
+        image.setAttribute("crossOrigin", "anonymous");
+        image.src = url;
+    });
+
+async function getCroppedImg(imageSrc, pixelCrop, mimeType = "image/jpeg") {
+    const image = await createImage(imageSrc);
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) return null;
+
+    canvas.width = pixelCrop.width;
+    canvas.height = pixelCrop.height;
+
+    ctx.drawImage(
+        image,
+        pixelCrop.x,
+        pixelCrop.y,
+        pixelCrop.width,
+        pixelCrop.height,
+        0,
+        0,
+        pixelCrop.width,
+        pixelCrop.height
+    );
+
+    return new Promise((resolve, reject) => {
+        canvas.toBlob(
+            (blob) => {
+                if (!blob) {
+                    reject(new Error("Canvas is empty"));
+                    return;
+                }
+                resolve(blob);
+            },
+            mimeType,
+            0.9
+        );
+    });
+}
 
 const DEFAULT_CATEGORIES = ["food", "drink", "snack", "dessert", "other"];
+
+const BADGE_OPTIONS = [
+    {
+        value: "",
+        label: "Tidak Ada (None)",
+        color: "bg-gray-100 text-gray-600 border-gray-200",
+    },
+    {
+        value: "popular",
+        label: "🔥 Popular",
+        color: "bg-orange-100 text-orange-700 border-orange-200",
+    },
+    {
+        value: "trending",
+        label: "📈 Trending",
+        color: "bg-pink-100 text-pink-700 border-pink-200",
+    },
+    {
+        value: "new",
+        label: "✨ Baru (New)",
+        color: "bg-blue-100 text-blue-700 border-blue-200",
+    },
+    {
+        value: "bestseller",
+        label: "👑 Best Seller",
+        color: "bg-yellow-100 text-yellow-700 border-yellow-200",
+    },
+    {
+        value: "recommended",
+        label: "👍 Recommended",
+        color: "bg-green-100 text-green-700 border-green-200",
+    },
+];
 
 export function ItemForm({
     item,
@@ -25,21 +108,32 @@ export function ItemForm({
     addCustomCategory,
 }) {
     const { t } = useLanguage();
-    const { theme } = useTemplate(); // Ambil tema dinamis
+    const { theme } = useTemplate();
 
+    // --- FORM STATE ---
     const [form, setForm] = useState({
         name: item?.name || "",
         price: item?.price || "",
         description: item?.description || "",
         category: item?.category || "food",
         photo: item?.photo || "",
+        badge: item?.badge || "",
     });
 
-    const [uploading, setUploading] = useState(false);
     const [errors, setErrors] = useState({});
-    const [uploadError, setUploadError] = useState("");
     const [showCategoryInput, setShowCategoryInput] = useState(false);
     const [newCategory, setNewCategory] = useState("");
+
+    // --- CROP STATE ---
+    const [imageSrc, setImageSrc] = useState(null);
+    const [imageType, setImageType] = useState("image/jpeg");
+    const [crop, setCrop] = useState({ x: 0, y: 0 });
+    const [zoom, setZoom] = useState(1);
+    const [aspect, setAspect] = useState(4 / 3); // Default aspect ratio
+    const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+    const [showCropModal, setShowCropModal] = useState(false);
+    const [uploading, setUploading] = useState(false); // Loading saat upload crop
+    const [uploadError, setUploadError] = useState("");
 
     const allCategories = [...DEFAULT_CATEGORIES, ...customCategories];
 
@@ -50,45 +144,79 @@ export function ItemForm({
         }
     };
 
-    const handlePhotoUpload = async (e) => {
+    // 1. Handle File Select -> Buka Crop Modal
+    const handleFileSelect = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        setUploadError("");
+        // Validasi awal
         const allowedTypes = [
             "image/jpeg",
             "image/png",
             "image/gif",
             "image/webp",
         ];
-
         if (!allowedTypes.includes(file.type)) {
-            setUploadError(
-                "Format file tidak didukung. Gunakan JPG, PNG, GIF, atau WebP."
-            );
+            setUploadError("Format file tidak didukung (JPG, PNG, WEBP).");
             return;
         }
-
         if (file.size > 5 * 1024 * 1024) {
-            setUploadError("Ukuran file terlalu besar. Maksimal 5MB.");
+            setUploadError("Ukuran file maksimal 5MB.");
             return;
         }
 
-        if (onUploadPhoto) {
-            setUploading(true);
-            try {
-                const result = await onUploadPhoto(file);
+        setImageType(file.type);
+        const reader = new FileReader();
+        reader.addEventListener("load", () => {
+            setImageSrc(reader.result);
+            setShowCropModal(true); // Buka modal crop
+            setUploadError("");
+        });
+        reader.readAsDataURL(file);
+        e.target.value = null; // Reset input agar bisa pilih file sama
+    };
+
+    const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
+        setCroppedAreaPixels(croppedAreaPixels);
+    }, []);
+
+    // 2. Proses Crop & Upload ke Supabase
+    const handleSaveCrop = async () => {
+        if (!imageSrc || !croppedAreaPixels) return;
+
+        setUploading(true);
+        try {
+            // Crop gambar
+            const croppedBlob = await getCroppedImg(
+                imageSrc,
+                croppedAreaPixels,
+                imageType
+            );
+
+            // Buat nama file
+            const ext = imageType.split("/")[1] || "jpg";
+            const fileName = `menu-${Date.now()}.${ext}`;
+
+            const fileToUpload = new File([croppedBlob], fileName, {
+                type: imageType,
+            });
+
+            // Upload via function props
+            if (onUploadPhoto) {
+                const result = await onUploadPhoto(fileToUpload);
                 setForm((prev) => ({ ...prev, photo: result.url }));
-                setUploadError("");
-            } catch (err) {
-                setUploadError(
-                    err.message || "Upload gagal. Silakan coba lagi."
-                );
-            } finally {
-                setUploading(false);
             }
+
+            // Tutup modal & reset
+            setShowCropModal(false);
+            setImageSrc(null);
+            setZoom(1);
+        } catch (err) {
+            console.error(err);
+            setUploadError("Gagal mengupload foto. Silakan coba lagi.");
+        } finally {
+            setUploading(false);
         }
-        e.target.value = "";
     };
 
     const handleRemovePhoto = () => {
@@ -131,21 +259,16 @@ export function ItemForm({
             description: form.description.trim(),
             category: form.category,
             photo: form.photo,
+            badge: form.badge,
         });
-    };
-
-    // Style Helper untuk Input yang Fokus
-    const focusStyle = {
-        borderColor: theme?.primary || "#3b82f6",
-        boxShadow: `0 0 0 4px ${theme?.primary}1A`, // 10% opacity color
     };
 
     return (
         <div className="space-y-5">
-            {/* 1. PHOTO UPLOAD SECTION */}
+            {/* --- PHOTO SECTION --- */}
             <div className="flex justify-center">
                 {form.photo ? (
-                    <div className="relative group">
+                    <div className="relative group w-full">
                         <img
                             src={form.photo}
                             alt="Preview"
@@ -159,7 +282,7 @@ export function ItemForm({
                             <button
                                 type="button"
                                 onClick={handleRemovePhoto}
-                                className="bg-red-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg hover:bg-red-600 transition-transform transform hover:scale-105"
+                                className="bg-red-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg hover:bg-red-600 transform hover:scale-105 transition-all"
                             >
                                 Hapus Foto
                             </button>
@@ -167,47 +290,22 @@ export function ItemForm({
                     </div>
                 ) : (
                     <label
-                        className={`w-full h-40 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group ${
-                            uploading
-                                ? "bg-gray-50 opacity-50"
-                                : "hover:bg-gray-50 hover:border-gray-400"
-                        }`}
-                        style={{
-                            borderColor: uploading ? "#e5e7eb" : undefined,
-                        }}
+                        className={`w-full h-40 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group hover:bg-gray-50 hover:border-gray-400`}
                     >
-                        {uploading ? (
-                            <>
-                                <Loader2
-                                    size={32}
-                                    className="animate-spin text-gray-400 mb-2"
-                                />
-                                <span className="text-sm text-gray-500">
-                                    Mengupload...
-                                </span>
-                            </>
-                        ) : (
-                            <>
-                                <div className="p-3 bg-gray-100 rounded-full mb-3 group-hover:scale-110 transition-transform">
-                                    <Upload
-                                        size={24}
-                                        className="text-gray-500"
-                                    />
-                                </div>
-                                <span className="text-sm font-medium text-gray-600">
-                                    Klik untuk upload foto
-                                </span>
-                                <span className="text-xs text-gray-400 mt-1">
-                                    JPG, PNG, WEBP (Max 5MB)
-                                </span>
-                            </>
-                        )}
+                        <div className="p-3 bg-gray-100 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                            <Upload size={24} className="text-gray-500" />
+                        </div>
+                        <span className="text-sm font-medium text-gray-600">
+                            Klik untuk upload foto
+                        </span>
+                        <span className="text-xs text-gray-400 mt-1">
+                            JPG, PNG, WEBP (Max 5MB)
+                        </span>
                         <input
                             type="file"
                             accept="image/*"
-                            onChange={handlePhotoUpload}
+                            onChange={handleFileSelect} // <--- Mengarah ke fungsi crop dulu
                             className="hidden"
-                            disabled={uploading}
                         />
                     </label>
                 )}
@@ -218,7 +316,7 @@ export function ItemForm({
                 )}
             </div>
 
-            {/* 2. FORM FIELDS */}
+            {/* --- FORM FIELDS --- */}
             <div className="space-y-4">
                 {/* Name */}
                 <div>
@@ -241,12 +339,6 @@ export function ItemForm({
                                     ? "border-red-500 bg-red-50"
                                     : "border-gray-200 bg-gray-50 focus:bg-white"
                             }`}
-                            style={{
-                                ...(errors.name
-                                    ? {}
-                                    : { ":focus": focusStyle }),
-                            }} // Note: inline focus style is tricky, relies on class logic usually.
-                            // Simple workaround for focus color:
                             onFocus={(e) =>
                                 (e.target.style.borderColor = theme?.primary)
                             }
@@ -258,16 +350,10 @@ export function ItemForm({
                             placeholder="Contoh: Nasi Goreng Spesial"
                         />
                     </div>
-                    {errors.name && (
-                        <p className="text-red-500 text-xs mt-1 ml-1">
-                            {errors.name}
-                        </p>
-                    )}
                 </div>
 
-                {/* Price & Category Row */}
+                {/* Price & Category */}
                 <div className="grid grid-cols-2 gap-4">
-                    {/* Price */}
                     <div>
                         <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block ml-1">
                             {t.price}
@@ -301,8 +387,6 @@ export function ItemForm({
                             />
                         </div>
                     </div>
-
-                    {/* Category */}
                     <div>
                         <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block ml-1">
                             {t.category}
@@ -334,14 +418,12 @@ export function ItemForm({
                                     </option>
                                 ))}
                             </select>
-                            {/* Add Category Button (Small) */}
                             <button
                                 type="button"
                                 onClick={() =>
                                     setShowCategoryInput(!showCategoryInput)
                                 }
                                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded-md text-gray-500"
-                                title="Tambah Kategori"
                             >
                                 <Plus size={16} />
                             </button>
@@ -349,7 +431,6 @@ export function ItemForm({
                     </div>
                 </div>
 
-                {/* New Category Input */}
                 {showCategoryInput && (
                     <div className="p-3 bg-gray-50 border border-dashed border-gray-300 rounded-xl flex gap-2 animate-fadeIn">
                         <input
@@ -370,36 +451,56 @@ export function ItemForm({
                     </div>
                 )}
 
+                {/* Badge Selection */}
+                <div>
+                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block ml-1 flex items-center gap-1">
+                        <Star size={12} /> Badge / Label
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {BADGE_OPTIONS.map((option) => (
+                            <button
+                                key={option.value}
+                                type="button"
+                                onClick={() =>
+                                    handleChange("badge", option.value)
+                                }
+                                className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
+                                    form.badge === option.value
+                                        ? "ring-2 ring-offset-1 " +
+                                          option.color.replace("bg-", "ring-") +
+                                          " " +
+                                          option.color
+                                        : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                                }`}
+                            >
+                                {option.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 {/* Description */}
                 <div>
                     <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 block ml-1">
                         {t.description}
                     </label>
-                    <div className="relative">
-                        <AlignLeft
-                            size={18}
-                            className="absolute left-3 top-4 text-gray-400"
-                        />
-                        <textarea
-                            value={form.description}
-                            onChange={(e) =>
-                                handleChange("description", e.target.value)
-                            }
-                            rows={3}
-                            className="w-full pl-10 pr-4 py-3 border border-gray-200 bg-gray-50 rounded-xl outline-none focus:bg-white resize-none transition-all"
-                            onFocus={(e) =>
-                                (e.target.style.borderColor = theme?.primary)
-                            }
-                            onBlur={(e) =>
-                                (e.target.style.borderColor = "#e5e7eb")
-                            }
-                            placeholder="Jelaskan detail menu ini..."
-                        />
-                    </div>
+                    <textarea
+                        value={form.description}
+                        onChange={(e) =>
+                            handleChange("description", e.target.value)
+                        }
+                        rows={3}
+                        className="w-full px-4 py-3 border border-gray-200 bg-gray-50 rounded-xl outline-none focus:bg-white resize-none transition-all"
+                        onFocus={(e) =>
+                            (e.target.style.borderColor = theme?.primary)
+                        }
+                        onBlur={(e) => (e.target.style.borderColor = "#e5e7eb")}
+                        placeholder="Deskripsi menu..."
+                    />
                 </div>
             </div>
 
-            {/* 3. ACTION BUTTONS */}
+            {/* Action Buttons */}
             <div className="flex gap-3 pt-2">
                 <button
                     type="button"
@@ -411,18 +512,102 @@ export function ItemForm({
                 <button
                     type="button"
                     onClick={handleSubmit}
-                    disabled={uploading}
                     className="flex-1 px-4 py-3 text-white rounded-xl font-medium shadow-md hover:opacity-90 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
                     style={{ background: theme?.buttonBg || "#666fb8" }}
                 >
-                    {uploading ? (
-                        <Loader2 size={20} className="animate-spin" />
-                    ) : (
-                        <Check size={20} />
-                    )}
-                    {uploading ? "Processing..." : t.save}
+                    {t.save}
                 </button>
             </div>
+
+            {/* --- CROP MODAL (Disematkan di sini agar logic tetap satu file) --- */}
+            <Modal
+                isOpen={showCropModal}
+                onClose={() => {
+                    setShowCropModal(false);
+                    setImageSrc(null);
+                }}
+                title="Sesuaikan Foto Menu"
+            >
+                <div className="space-y-4">
+                    <div className="relative w-full h-64 bg-gray-900 rounded-xl overflow-hidden shadow-inner">
+                        <Cropper
+                            image={imageSrc}
+                            crop={crop}
+                            zoom={zoom}
+                            aspect={aspect} // Gunakan state aspect ratio
+                            onCropChange={setCrop}
+                            onCropComplete={onCropComplete}
+                            onZoomChange={setZoom}
+                            showGrid={true}
+                        />
+                    </div>
+
+                    {/* Kontrol Zoom & Aspek Rasio */}
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                            <ZoomIn size={16} className="text-gray-500" />
+                            <input
+                                type="range"
+                                value={zoom}
+                                min={1}
+                                max={3}
+                                step={0.1}
+                                onChange={(e) => setZoom(e.target.value)}
+                                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                            />
+                        </div>
+
+                        {/* Pilihan Rasio */}
+                        <div className="flex justify-center gap-2">
+                            {[
+                                { l: "1:1", v: 1 },
+                                { l: "4:3", v: 4 / 3 },
+                                { l: "16:9", v: 16 / 9 },
+                            ].map((r) => (
+                                <button
+                                    key={r.l}
+                                    type="button"
+                                    onClick={() => setAspect(r.v)}
+                                    className={`px-3 py-1 text-xs rounded-md border ${
+                                        aspect === r.v
+                                            ? "bg-gray-800 text-white border-gray-800"
+                                            : "bg-white text-gray-600 border-gray-200"
+                                    }`}
+                                >
+                                    {r.l}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3 pt-2 border-t mt-2">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setShowCropModal(false);
+                                setImageSrc(null);
+                            }}
+                            className="flex-1 px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveCrop}
+                            disabled={uploading}
+                            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center justify-center gap-2 hover:bg-blue-700"
+                            style={{ background: theme?.buttonBg }}
+                        >
+                            {uploading ? (
+                                <Loader2 className="animate-spin" size={18} />
+                            ) : (
+                                <Check size={18} />
+                            )}
+                            {uploading ? "Menyimpan..." : "Simpan Foto"}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }

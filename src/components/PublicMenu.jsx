@@ -18,6 +18,8 @@ import {
     LogOut,
     Store,
     Share2,
+    Star,
+    Tag,
 } from "lucide-react";
 
 import { useLanguage } from "../contexts/LanguageContext";
@@ -28,26 +30,64 @@ import Toast from "./Toast";
 
 // --- Components ---
 
-function Badge({ children, variant }) {
-    const cls =
-        variant === "trending"
-            ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white"
-            : "bg-gradient-to-r from-amber-400 to-orange-500 text-white";
+// Komponen Badge Pintar (Support Preset & Custom)
+function Badge({ text, theme }) {
+    if (!text) return null;
 
+    // 1. Definisi Preset Style (Ikon & Warna Khusus)
+    const presets = {
+        popular: {
+            label: "Popular",
+            color: "from-orange-400 to-red-500",
+            icon: Award,
+        },
+        trending: {
+            label: "Trending",
+            color: "from-pink-500 to-rose-500",
+            icon: TrendingUp,
+        },
+        new: { label: "New", color: "from-blue-400 to-cyan-500", icon: Star },
+        bestseller: {
+            label: "Best Seller",
+            color: "from-yellow-400 to-orange-500",
+            icon: Award,
+        },
+        recommended: {
+            label: "Recommended",
+            color: "from-green-400 to-emerald-500",
+            icon: Star,
+        },
+    };
+
+    // Cek apakah text adalah key preset (case insensitive)
+    const presetKey = text.toLowerCase().replace(/\s+/g, "");
+    const preset = presets[text] || presets[presetKey];
+
+    if (preset) {
+        const Icon = preset.icon;
+        return (
+            <span
+                className={`inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded-lg text-white shadow-sm bg-gradient-to-r ${preset.color}`}
+            >
+                <Icon size={12} /> {preset.label}
+            </span>
+        );
+    }
+
+    // 2. Fallback: Custom Badge (Warna mengikuti Tema Toko)
+    // Menampilkan teks apa adanya dari input admin
     return (
         <span
-            className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full ${cls}`}
+            className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded-lg text-white shadow-sm capitalize"
+            style={{ background: theme.primary }} // Menggunakan warna tema utama
         >
-            {children}
+            <Tag size={12} /> {text}
         </span>
     );
 }
 
 function MenuItemCardLarge({ item, onClick, theme }) {
     const { t } = useLanguage();
-    const isPopular = (item?.views || 0) > 80 && (item?.views || 0) <= 150;
-    const isTrending = (item?.views || 0) > 150;
-
     const formatPrice = (p) =>
         new Intl.NumberFormat("id-ID").format(Number(p || 0));
 
@@ -83,18 +123,19 @@ function MenuItemCardLarge({ item, onClick, theme }) {
                     </div>
                 )}
 
-                <div className="absolute top-3 left-3 flex flex-col gap-2">
-                    {isTrending && (
-                        <Badge variant="trending">
-                            <TrendingUp size={12} /> {t?.trending || "Trending"}
-                        </Badge>
-                    )}
-                    {isPopular && (
-                        <Badge variant="popular">
-                            <Award size={12} /> {t?.popularItem || "Popular"}
-                        </Badge>
-                    )}
-                </div>
+                {/* TAMPILKAN BADGE (Manual dari Admin) */}
+                {item.badge && (
+                    <div className="absolute top-3 left-3 flex flex-wrap gap-2">
+                        <Badge text={item.badge} theme={theme} />
+                    </div>
+                )}
+
+                {/* Fallback: Jika admin tidak set badge, tapi views tinggi, tampilkan trending otomatis */}
+                {!item.badge && item.views > 150 && (
+                    <div className="absolute top-3 left-3">
+                        <Badge text="trending" theme={theme} />
+                    </div>
+                )}
             </div>
 
             <div className="p-4">
@@ -177,6 +218,13 @@ function ItemDetailModal({ item, isOpen, onClose, onAdd, theme }) {
                     >
                         <X size={18} />
                     </button>
+
+                    {/* BADGE DI MODAL */}
+                    <div className="absolute bottom-3 left-3 flex gap-2">
+                        {item.badge && (
+                            <Badge text={item.badge} theme={theme} />
+                        )}
+                    </div>
                 </div>
 
                 <div className="p-5">
@@ -393,6 +441,7 @@ export default function PublicMenu() {
     const { theme } = useTemplate();
     const navigate = useNavigate();
 
+    // UI State
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("all");
     const [cart, setCart] = useState([]);
@@ -404,6 +453,7 @@ export default function PublicMenu() {
     const [toast, setToast] = useState({ message: "", type: "" });
     const [showUserMenu, setShowUserMenu] = useState(false);
 
+    // Derived Values
     const categories = useMemo(() => {
         if (!items) return ["all"];
         const derived = [
@@ -431,6 +481,7 @@ export default function PublicMenu() {
         0
     );
 
+    // Helper Functions
     const showToast = (msg, type = "success") => {
         setToast({ message: msg, type });
         setTimeout(() => setToast({ message: "", type: "" }), 3000);
@@ -441,19 +492,23 @@ export default function PublicMenu() {
         return s.charAt(0).toUpperCase() + s.slice(1);
     };
 
+    // Cart Functions
     const addToCart = (item, qty = 1, note = "") => {
         setCart((prev) => {
             const existingIndex = prev.findIndex(
                 (p) => p.id === item.id && (p.note || "") === (note || "")
             );
+
             if (existingIndex >= 0) {
                 const copy = [...prev];
                 copy[existingIndex].quantity =
                     (copy[existingIndex].quantity || 0) + qty;
                 return copy;
             }
+
             return [...prev, { ...item, quantity: qty, note }];
         });
+
         showToast(
             t?.addedToCart ||
                 (lang === "id" ? "Ditambahkan ke keranjang" : "Added to cart")
@@ -469,8 +524,9 @@ export default function PublicMenu() {
         );
     };
 
-    const removeFromCart = (index) =>
+    const removeFromCart = (index) => {
         setCart((prev) => prev.filter((_, i) => i !== index));
+    };
 
     const onItemClick = async (item) => {
         setSelectedItem(item);
@@ -532,6 +588,7 @@ export default function PublicMenu() {
             selectedCategory === "all"
                 ? items
                 : items.filter((i) => i.category === selectedCategory);
+
         const filtered = source.filter((i) =>
             (i?.name || "").toLowerCase().includes(q)
         );
@@ -591,7 +648,7 @@ export default function PublicMenu() {
                             <button
                                 onClick={() => setShowUserMenu(!showUserMenu)}
                                 className="p-0.5 hover:bg-white/20 rounded-full transition-colors flex items-center justify-center"
-                                style={{ width: "48px", height: "48px" }} // DIPERBESAR JADI 48px
+                                style={{ width: "48px", height: "48px" }}
                             >
                                 {profile?.avatar_url ? (
                                     <img
@@ -643,7 +700,7 @@ export default function PublicMenu() {
                                                             style={{
                                                                 color: theme.iconColor,
                                                             }}
-                                                        />{" "}
+                                                        />
                                                         {lang === "id"
                                                             ? "Dashboard Admin"
                                                             : "Admin Dashboard"}
@@ -661,7 +718,7 @@ export default function PublicMenu() {
                                                         style={{
                                                             color: theme.iconColor,
                                                         }}
-                                                    />{" "}
+                                                    />
                                                     {lang === "id"
                                                         ? "Profil Saya"
                                                         : "My Profile"}
@@ -673,7 +730,7 @@ export default function PublicMenu() {
                                                     }}
                                                     className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-600 hover:bg-red-50 text-left border-t"
                                                 >
-                                                    <LogOut size={16} />{" "}
+                                                    <LogOut size={16} />
                                                     {lang === "id"
                                                         ? "Keluar"
                                                         : "Logout"}
@@ -692,7 +749,7 @@ export default function PublicMenu() {
                                                     style={{
                                                         color: theme.iconColor,
                                                     }}
-                                                />{" "}
+                                                />
                                                 {lang === "id"
                                                     ? "Masuk / Daftar"
                                                     : "Login / Register"}
@@ -777,6 +834,7 @@ export default function PublicMenu() {
                         {t?.loading || "Loading..."}
                     </p>
                 )}
+
                 {!loading && filteredGroups.length === 0 && (
                     <div className="text-center py-16 text-gray-500">
                         <PackageIcon
@@ -827,6 +885,7 @@ export default function PublicMenu() {
                 onAdd={addToCart}
                 theme={theme}
             />
+
             <OrderTypeModal
                 isOpen={showOrderTypeModal}
                 onSelect={handleOrderTypeSelect}
@@ -967,6 +1026,7 @@ export default function PublicMenu() {
                                     </div>
                                 </div>
                                 <div className="w-40">
+                                    {/* Checkout Button - DYNAMIC BACKGROUND */}
                                     <button
                                         onClick={() => {
                                             if (!selectedOrderType) {

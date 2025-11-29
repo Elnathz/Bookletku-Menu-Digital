@@ -10,24 +10,20 @@ export function useSupabase() {
     const [customCategories, setCustomCategories] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // --- Helper: Handle Auth Errors (Anti-Bug Session) ---
     const handleSupabaseError = async (error) => {
         console.error("Supabase Operation Error:", error);
-        // Jika error karena JWT expired
         if (error?.message?.includes("JWT") || error?.code === "PGRST301") {
-            console.warn("Session expired, attempting refresh...");
             const { data, error: refreshError } =
                 await supabase.auth.refreshSession();
             if (refreshError || !data.session) {
                 window.location.href = "/login";
                 return false;
             }
-            return true; // Session refreshed
+            return true;
         }
         return false;
     };
 
-    // --- Fetch Items ---
     const fetchItems = useCallback(async () => {
         try {
             const { data, error } = await supabase
@@ -47,6 +43,7 @@ export function useSupabase() {
                 photo: item.photo || "",
                 views: item.views || 0,
                 order: item.sort_order || 0,
+                badge: item.badge_text || "", // <--- Mapping kolom badge_text
             }));
 
             setItems(transformed);
@@ -70,7 +67,6 @@ export function useSupabase() {
         }
     }, []);
 
-    // --- Fetch Settings ---
     const fetchSettings = useCallback(async () => {
         try {
             const { data, error } = await supabase
@@ -84,7 +80,6 @@ export function useSupabase() {
             if (data) {
                 setSettingsState({
                     storeName: data.name,
-                    // Pastikan nama kolom sesuai database (store_location, operating_hours)
                     storeLocation: data.store_location || "",
                     operatingHours: data.operating_hours || "",
                     whatsappNumber: data.whatsapp_number,
@@ -95,19 +90,15 @@ export function useSupabase() {
         }
     }, []);
 
-    // --- Initial Load ---
     useEffect(() => {
         let mounted = true;
-
         const init = async () => {
             setLoading(true);
             await Promise.all([fetchItems(), fetchSettings()]);
             if (mounted) setLoading(false);
         };
-
         init();
 
-        // Subscribe to changes (Realtime)
         const channel = supabase
             .channel("db_changes")
             .on(
@@ -128,7 +119,7 @@ export function useSupabase() {
         };
     }, []);
 
-    // --- CRUD Actions (Menu Items) ---
+    // --- CRUD Actions ---
 
     const addItem = async (itemData) => {
         try {
@@ -141,6 +132,7 @@ export function useSupabase() {
                     description: itemData.description || "",
                     category: itemData.category || "food",
                     photo: itemData.photo || "",
+                    badge_text: itemData.badge || null, // <--- Simpan Badge
                     views: 0,
                     sort_order: items.length,
                 })
@@ -152,9 +144,7 @@ export function useSupabase() {
             return data;
         } catch (err) {
             const refreshed = await handleSupabaseError(err);
-            if (refreshed) {
-                alert("Sesi diperbarui. Silakan coba simpan lagi.");
-            }
+            if (refreshed) alert("Sesi diperbarui. Silakan coba simpan lagi.");
             throw err;
         }
     };
@@ -169,6 +159,7 @@ export function useSupabase() {
                     description: itemData.description || "",
                     category: itemData.category,
                     photo: itemData.photo,
+                    badge_text: itemData.badge || null, // <--- Update Badge
                     updated_at: new Date().toISOString(),
                 })
                 .eq("id", id);
@@ -192,38 +183,40 @@ export function useSupabase() {
     };
 
     const reorderItems = async (newItems) => {
+        // 1. Update Tampilan UI (Optimistic) LANGSUNG
         setItems(newItems);
-        try {
-            const updates = newItems.map((item, index) => ({
-                id: item.id,
-                sort_order: index,
-                updated_at: new Date().toISOString(),
-            }));
 
-            const { error } = await supabase.from("menu_items").upsert(updates);
-            if (error) throw error;
+        try {
+            // 2. Kirim update ke server (Background)
+            // Update sort_order berdasarkan index baru di array
+            const promises = newItems.map((item, index) =>
+                supabase
+                    .from("menu_items")
+                    .update({
+                        sort_order: index, // Kunci utamanya di sini: Index array = Urutan DB
+                        updated_at: new Date().toISOString(),
+                    })
+                    .eq("id", item.id)
+            );
+
+            await Promise.all(promises);
         } catch (err) {
-            await handleSupabaseError(err);
-            await fetchItems();
+            console.error("❌ Reorder error:", err);
+            await fetchItems(); // Revert jika gagal
         }
     };
 
-    // --- Upload Foto Menu ---
     const uploadPhoto = async (file) => {
         try {
             const ext = file.name.split(".").pop();
             const fileName = `menu-${Date.now()}.${ext}`;
-
             const { error } = await supabase.storage
                 .from(STORAGE_BUCKET)
                 .upload(fileName, file);
-
             if (error) throw error;
-
             const { data } = supabase.storage
                 .from(STORAGE_BUCKET)
                 .getPublicUrl(fileName);
-
             return { url: data.publicUrl };
         } catch (err) {
             await handleSupabaseError(err);
@@ -231,33 +224,21 @@ export function useSupabase() {
         }
     };
 
-    // --- BARU: Upload Avatar Profil ---
     const uploadAvatar = async (file, userId) => {
         try {
-            // 1. Deteksi ekstensi dari tipe file (lebih aman) atau nama file
-            const fileExt = file.name.split(".").pop();
-            const fileName = `avatars/${userId}-${Date.now()}.${fileExt}`;
-
-            // 2. Upload ke Storage
+            const ext = file.name.split(".").pop();
+            const fileName = `avatars/${userId}/${Date.now()}.${ext}`;
             const { error } = await supabase.storage
                 .from(STORAGE_BUCKET)
                 .upload(fileName, file, {
                     upsert: true,
-                    contentType: file.type, // Gunakan tipe asli file (image/png, image/jpeg, dll)
+                    contentType: file.type,
                     cacheControl: "3600",
                 });
-
-            if (error) {
-                console.error("Supabase Storage Error:", error);
-                throw error;
-            }
-
-            // 3. Ambil URL Publik
+            if (error) throw error;
             const { data } = supabase.storage
                 .from(STORAGE_BUCKET)
                 .getPublicUrl(fileName);
-
-            // 4. Update tabel user_profiles
             const { error: updateError } = await supabase
                 .from("user_profiles")
                 .update({
@@ -265,40 +246,33 @@ export function useSupabase() {
                     updated_at: new Date().toISOString(),
                 })
                 .eq("id", userId);
-
             if (updateError) throw updateError;
-
             return { url: data.publicUrl };
         } catch (err) {
             await handleSupabaseError(err);
             throw err;
         }
     };
-    
-    // --- Save Settings ---
+
     const setSettings = async (s) => {
         try {
             const { error } = await supabase
                 .from("stores")
                 .update({
                     name: s.storeName,
-                    // Pastikan nama kolom sesuai database
                     store_location: s.storeLocation,
                     operating_hours: s.operatingHours,
                     whatsapp_number: s.whatsappNumber,
                     updated_at: new Date().toISOString(),
                 })
                 .eq("id", DEFAULT_STORE_ID);
-
             if (error) throw error;
             setSettingsState(s);
         } catch (err) {
             const refreshed = await handleSupabaseError(err);
-            if (refreshed) {
+            if (refreshed)
                 alert("Koneksi diperbarui. Silakan tekan Simpan lagi.");
-            } else {
-                alert("Gagal menyimpan. Pastikan Anda login.");
-            }
+            else alert("Gagal menyimpan. Pastikan Anda login.");
             throw err;
         }
     };
@@ -313,7 +287,7 @@ export function useSupabase() {
         deleteItem,
         reorderItems,
         uploadPhoto,
-        uploadAvatar, // <--- Sudah di-return untuk dipakai di UserProfile
+        uploadAvatar,
         setSettings,
         refetch: fetchItems,
     };

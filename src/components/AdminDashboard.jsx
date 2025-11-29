@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     DndContext,
@@ -7,6 +7,8 @@ import {
     PointerSensor,
     useSensor,
     useSensors,
+    DragOverlay,
+    defaultDropAnimationSideEffects,
 } from "@dnd-kit/core";
 import {
     arrayMove,
@@ -36,6 +38,8 @@ import {
     MapPin,
     Phone,
     Globe,
+    Info,
+    ArrowUpDown,
 } from "lucide-react";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -43,7 +47,7 @@ import { useSupabase } from "../hooks/useSupabase";
 import { useTemplate } from "../contexts/TemplateContext";
 import Modal from "./Modal";
 import ItemForm from "./itemForm";
-import { MenuCard } from "./MenuCard";
+import { MenuCard, MenuCardItem } from "./MenuCard";
 import QRCodeDisplay from "./QRCode";
 
 // --- Components Helper ---
@@ -120,7 +124,6 @@ function Sidebar({ isOpen, onClose, currentPage, onNavigate }) {
       `}
             >
                 <div className="flex flex-col h-full">
-                    {/* Header Sidebar */}
                     <div className="p-4 border-b flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-2">
                             <div className="w-10 h-10 bg-gradient-to-br from-[#666fb8] to-[#333fa1] rounded-xl flex items-center justify-center">
@@ -143,7 +146,6 @@ function Sidebar({ isOpen, onClose, currentPage, onNavigate }) {
                         </button>
                     </div>
 
-                    {/* Menu Navigation */}
                     <nav className="p-4 space-y-1 flex-1 overflow-y-auto">
                         {menuItems.map((item) => (
                             <button
@@ -172,7 +174,6 @@ function Sidebar({ isOpen, onClose, currentPage, onNavigate }) {
                         ))}
                     </nav>
 
-                    {/* User Profile */}
                     <div className="p-4 border-t bg-gray-50 shrink-0">
                         <div className="flex items-center gap-3 mb-3">
                             <div className="w-10 h-10 bg-white border rounded-full flex items-center justify-center">
@@ -273,7 +274,6 @@ function SettingsPage({ settings, onSave }) {
 
     return (
         <div className="max-w-3xl mx-auto space-y-6 pb-10">
-            {/* Tampilan Web Config */}
             <div className="bg-white rounded-xl border shadow-sm p-6 space-y-5">
                 <div className="text-center pb-4 border-b">
                     <h3 className="text-xl font-bold text-gray-900">
@@ -349,7 +349,6 @@ function SettingsPage({ settings, onSave }) {
                 )}
             </div>
 
-            {/* Informasi Toko */}
             <div className="bg-white rounded-xl border shadow-sm p-6 space-y-5">
                 <div className="text-center pb-4 border-b">
                     <h3 className="text-xl font-bold text-gray-900">
@@ -516,7 +515,6 @@ function SettingsPage({ settings, onSave }) {
                 </button>
             </div>
 
-            {/* Language Settings */}
             <div className="bg-white rounded-xl border shadow-sm p-6">
                 <div className="text-center pb-4 border-b mb-4">
                     <h3 className="text-xl font-bold text-gray-900">
@@ -680,7 +678,11 @@ export function AdminDashboard() {
     const [modal, setModal] = useState(null);
     const [editingItem, setEditingItem] = useState(null);
     const [notification, setNotification] = useState("");
-    const [modalAlert, setModalAlert] = useState(null); // --- STATE ALERT MODAL ---
+    const [modalAlert, setModalAlert] = useState(null);
+
+    // Filter & Drag State
+    const [filterCategory, setFilterCategory] = useState("all");
+    const [activeItem, setActiveItem] = useState(null);
 
     const menuSlug =
         settings.storeName
@@ -707,7 +709,6 @@ export function AdminDashboard() {
         showNotif(t.linkCopied);
     };
 
-    // --- LOGIC SAVE DENGAN MODAL ALERT ---
     const handleSaveItem = async (formData) => {
         try {
             if (editingItem) {
@@ -729,12 +730,10 @@ export function AdminDashboard() {
                             : "New menu added!",
                 });
             }
-
-            // Delay tutup modal biar user lihat centang hijau
             setTimeout(() => {
                 setModal(null);
                 setEditingItem(null);
-                setModalAlert(null); // Reset alert
+                setModalAlert(null);
             }, 1500);
         } catch (err) {
             console.error("Save failed:", err);
@@ -752,15 +751,62 @@ export function AdminDashboard() {
         }
     };
 
+    const handleDragStart = (event) => {
+        const { active } = event;
+        const item = items.find((i) => i.id === active.id);
+        setActiveItem(item);
+    };
+
     const handleDragEnd = (event) => {
         const { active, over } = event;
         if (active.id !== over?.id) {
+            // Logic: Cari index asli dari item yang digeser di dalam array global
             const oldIndex = items.findIndex((i) => i.id === active.id);
             const newIndex = items.findIndex((i) => i.id === over.id);
-            reorderItems(arrayMove(items, oldIndex, newIndex));
+            if (oldIndex !== -1 && newIndex !== -1) {
+                reorderItems(arrayMove(items, oldIndex, newIndex));
+            }
         }
+        setActiveItem(null);
     };
-    const sortedItems = [...items].sort((a, b) => a.order - b.order);
+
+    const handleDragCancel = () => setActiveItem(null);
+    const dropAnimation = {
+        sideEffects: defaultDropAnimationSideEffects({
+            styles: { active: { opacity: "0.5" } },
+        }),
+    };
+
+    // --- LOGIC GROUPING & FILTER ---
+    const categories = [
+        "all",
+        "food",
+        "drink",
+        "snack",
+        "dessert",
+        "other",
+        ...customCategories,
+    ];
+
+    const displayData = useMemo(() => {
+        if (filterCategory !== "all") {
+            return items
+                .filter((item) => item.category === filterCategory)
+                .sort((a, b) => a.order - b.order);
+        }
+
+        const groups = {};
+        const sortedGlobal = [...items].sort((a, b) => a.order - b.order);
+        sortedGlobal.forEach((item) => {
+            const cat = item.category || "other";
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(item);
+        });
+        return Object.entries(groups).map(([cat, list]) => ({
+            category: cat,
+            items: list,
+        }));
+    }, [items, filterCategory]);
 
     if (loading) {
         return (
@@ -854,14 +900,54 @@ export function AdminDashboard() {
                                     {t.copyLink}
                                 </button>
                             </div>
+
+                            {/* --- CATEGORY TABS --- */}
+                            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                                {categories.map((cat) => (
+                                    <button
+                                        key={cat}
+                                        onClick={() => setFilterCategory(cat)}
+                                        className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                                            filterCategory === cat
+                                                ? "bg-[#666fb8] text-white shadow-sm"
+                                                : "bg-white border text-gray-600 hover:bg-gray-50"
+                                        }`}
+                                    >
+                                        {cat === "all"
+                                            ? lang === "id"
+                                                ? "Semua"
+                                                : "All"
+                                            : cat.charAt(0).toUpperCase() +
+                                              cat.slice(1)}
+                                    </button>
+                                ))}
+                            </div>
+
                             <div className="flex items-center justify-between">
                                 <h3 className="font-medium">
-                                    {t.menuItems} ({items.length})
+                                    {t.menuItems}
+                                    {filterCategory === "all"
+                                        ? ` (${items.length})`
+                                        : ` (${displayData.length})`}
                                 </h3>
-                                <p className="text-xs text-gray-500">
-                                    {t.dragToReorder}
-                                </p>
+                                {filterCategory === "all" ? (
+                                    // Info jika di tab ALL
+                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs">
+                                        <Info size={14} />
+                                        <span>
+                                            Pilih kategori untuk mengatur urutan
+                                            (Drag & Drop)
+                                        </span>
+                                    </div>
+                                ) : (
+                                    // Info jika di tab KATEGORI (DnD Aktif)
+                                    <p className="text-xs text-[#666fb8] font-medium flex items-center gap-1">
+                                        <ArrowUpDown size={12} />
+                                        {t.dragToReorder}
+                                    </p>
+                                )}
                             </div>
+
                             {items.length === 0 ? (
                                 <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed">
                                     <Package
@@ -878,21 +964,62 @@ export function AdminDashboard() {
                                         {t.addFirstItem}
                                     </button>
                                 </div>
+                            ) : /* LOGIC TAMPILAN */
+                            filterCategory === "all" ? (
+                                // TAMPILAN SEMUA (GROUPED, STATIC - showGrip FALSE)
+                                <div className="space-y-8">
+                                    {displayData.map((group) => (
+                                        <section
+                                            key={group.category}
+                                            className="bg-white/50 rounded-xl p-4 border border-dashed border-gray-200"
+                                        >
+                                            <h4 className="text-lg font-bold mb-4 capitalize text-gray-800 flex items-center gap-2">
+                                                <span className="w-1.5 h-6 bg-[#666fb8] rounded-full"></span>
+                                                {t[group.category] ||
+                                                    group.category}
+                                                <span className="text-xs font-normal text-gray-500 ml-auto bg-white px-2 py-1 rounded border">
+                                                    {group.items.length} item
+                                                </span>
+                                            </h4>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                                                {group.items.map((item) => (
+                                                    <MenuCardItem
+                                                        key={item.id}
+                                                        item={item}
+                                                        isAdmin={true}
+                                                        showGrip={false} // <--- DND HANDLE HIDDEN
+                                                        onEdit={(item) => {
+                                                            setEditingItem(
+                                                                item
+                                                            );
+                                                            setModal("edit");
+                                                        }}
+                                                        onDelete={handleDelete}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </section>
+                                    ))}
+                                </div>
                             ) : (
+                                // TAMPILAN PER KATEGORI (SORTABLE - showGrip TRUE)
                                 <DndContext
                                     sensors={sensors}
                                     collisionDetection={closestCenter}
+                                    onDragStart={handleDragStart}
                                     onDragEnd={handleDragEnd}
+                                    onDragCancel={handleDragCancel}
                                 >
                                     <SortableContext
-                                        items={sortedItems.map((i) => i.id)}
+                                        items={displayData.map((i) => i.id)}
                                         strategy={rectSortingStrategy}
                                     >
                                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                                            {sortedItems.map((item) => (
+                                            {displayData.map((item) => (
                                                 <MenuCard
                                                     key={item.id}
                                                     item={item}
+                                                    showGrip={true} // <--- DND HANDLE SHOWN
                                                     onEdit={(item) => {
                                                         setEditingItem(item);
                                                         setModal("edit");
@@ -902,6 +1029,16 @@ export function AdminDashboard() {
                                             ))}
                                         </div>
                                     </SortableContext>
+                                    <DragOverlay dropAnimation={dropAnimation}>
+                                        {activeItem ? (
+                                            <MenuCardItem
+                                                item={activeItem}
+                                                isOverlay={true}
+                                                isAdmin={true}
+                                                showGrip={true}
+                                            />
+                                        ) : null}
+                                    </DragOverlay>
                                 </DndContext>
                             )}
                         </div>
