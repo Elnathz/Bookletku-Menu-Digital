@@ -1,468 +1,603 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import Cropper from "react-easy-crop";
 import {
-  User,
-  Mail,
-  ShoppingBag,
-  ArrowLeft,
-  LogOut,
-  Globe,
-  Package,
-  Edit2,
-  Save,
-  X,
-  Lock,
-  Eye,
-  EyeOff,
+    User,
+    Mail,
+    ArrowLeft,
+    LogOut,
+    Globe,
+    Edit2,
+    Save,
+    X,
+    Lock,
+    Eye,
+    EyeOff,
+    Camera,
+    Loader2,
+    ZoomIn,
+    Check,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { supabase } from "../config/supabase";
+import { useSupabase } from "../hooks/useSupabase";
+import { useTemplate } from "../contexts/TemplateContext";
 import Toast from "./Toast";
+import Modal from "./Modal";
 
-export function UserProfile() {
-  const navigate = useNavigate();
-  const { user, signOut } = useAuth();
-  const { t, lang, toggleLang } = useLanguage();
-
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [isEditingPassword, setIsEditingPassword] = useState(false);
-  const [name, setName] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  
-  // State untuk notifikasi
-  const [toast, setToast] = useState({ message: "", type: "" });
-
-  // Mock order history
-  const [orders] = useState([
-    {
-      id: 1,
-      date: "2024-11-20",
-      total: 85000,
-      items: 4,
-      status: "completed",
-    },
-    {
-      id: 2,
-      date: "2024-11-18",
-      total: 45000,
-      items: 2,
-      status: "completed",
-    },
-    {
-      id: 3,
-      date: "2024-11-15",
-      total: 120000,
-      items: 6,
-      status: "completed",
-    },
-  ]);
-
-  const totalSpent = orders.reduce((sum, o) => sum + o.total, 0);
-  const totalOrders = orders.length;
-
-  useEffect(() => {
-    if (user) {
-      setName(user.user_metadata?.name || user.email?.split("@")[0] || "");
-    }
-  }, [user]);
-
-  const formatPrice = (p) => new Intl.NumberFormat("id-ID").format(p);
-  const formatDate = (d) =>
-    new Date(d).toLocaleDateString(lang === "id" ? "id-ID" : "en-US", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
+// --- UTILITY: CROP IMAGE ---
+const createImage = (url) =>
+    new Promise((resolve, reject) => {
+        const image = new Image();
+        image.addEventListener("load", () => resolve(image));
+        image.addEventListener("error", (error) => reject(error));
+        image.setAttribute("crossOrigin", "anonymous");
+        image.src = url;
     });
 
-  const showMessage = (type, text) => {
-    setToast({ message: text, type });
-    setTimeout(() => setToast({ message: "", type: "" }), 3000);
-  };
+async function getCroppedImg(imageSrc, pixelCrop, mimeType = "image/jpeg") {
+    const image = await createImage(imageSrc);
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
 
-  const handleUpdateName = async () => {
-    if (!name.trim()) {
-      showMessage(
-        "error",
-        lang === "id" ? "Nama tidak boleh kosong" : "Name cannot be empty"
-      );
-      return;
-    }
+    if (!ctx) return null;
 
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.updateUser({
-        data: { name: name.trim() },
-      });
+    canvas.width = pixelCrop.width;
+    canvas.height = pixelCrop.height;
 
-      if (error) throw error;
+    ctx.drawImage(
+        image,
+        pixelCrop.x,
+        pixelCrop.y,
+        pixelCrop.width,
+        pixelCrop.height,
+        0,
+        0,
+        pixelCrop.width,
+        pixelCrop.height
+    );
 
-      // Update in user_profiles table if exists
-      await supabase
-        .from("user_profiles")
-        .update({ name: name.trim() })
-        .eq("id", user.id);
+    return new Promise((resolve, reject) => {
+        canvas.toBlob(
+            (blob) => {
+                if (!blob) {
+                    reject(new Error("Canvas is empty"));
+                    return;
+                }
+                resolve(blob);
+            },
+            mimeType,
+            0.9
+        );
+    });
+}
 
-      showMessage(
-        "success",
-        lang === "id"
-          ? "Nama berhasil diperbarui!"
-          : "Name updated successfully!"
-      );
-      setIsEditingName(false);
-    } catch (err) {
-      showMessage("error", err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+// --- MAIN COMPONENT ---
 
-  const handleUpdatePassword = async () => {
-    if (newPassword.length < 6) {
-      showMessage(
-        "error",
-        lang === "id"
-          ? "Password minimal 6 karakter"
-          : "Password must be at least 6 characters"
-      );
-      return;
-    }
+export function UserProfile() {
+    const navigate = useNavigate();
+    const { user, profile, signOut, refreshProfile } = useAuth();
+    const { t, lang, toggleLang } = useLanguage();
+    const { theme } = useTemplate();
+    const { uploadAvatar } = useSupabase();
 
-    if (newPassword !== confirmPassword) {
-      showMessage(
-        "error",
-        lang === "id" ? "Password tidak cocok" : "Passwords do not match"
-      );
-      return;
-    }
+    // Form State
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [isEditingPassword, setIsEditingPassword] = useState(false);
+    const [name, setName] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
 
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
+    // Crop & Upload State
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [imageSrc, setImageSrc] = useState(null);
+    const [imageType, setImageType] = useState("image/jpeg");
+    const [crop, setCrop] = useState({ x: 0, y: 0 });
+    const [zoom, setZoom] = useState(1);
+    const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+    const [showCropModal, setShowCropModal] = useState(false);
 
-      if (error) throw error;
+    const [toast, setToast] = useState({ message: "", type: "" });
 
-      showMessage(
-        "success",
-        lang === "id"
-          ? "Password berhasil diperbarui!"
-          : "Password updated successfully!"
-      );
-      setIsEditingPassword(false);
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (err) {
-      showMessage("error", err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const [orders] = useState([
+        {
+            id: 1,
+            date: "2024-11-20",
+            total: 85000,
+            items: 4,
+            status: "completed",
+        },
+        {
+            id: 2,
+            date: "2024-11-18",
+            total: 45000,
+            items: 2,
+            status: "completed",
+        },
+        {
+            id: 3,
+            date: "2024-11-15",
+            total: 120000,
+            items: 6,
+            status: "completed",
+        },
+    ]);
+    const totalSpent = orders.reduce((sum, o) => sum + o.total, 0);
+    const totalOrders = orders.length;
 
-  const handleLogout = async () => {
-    await signOut();
-    navigate("/");
-  };
+    useEffect(() => {
+        if (profile) {
+            setName(profile.name || user?.user_metadata?.name || "");
+        }
+    }, [profile, user]);
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Komponen Toast yang Benar */}
-      <Toast
-        message={toast.message}
-        type={toast.type}
-        onClose={() => setToast({ message: "", type: "" })}
-      />
+    const formatPrice = (p) => new Intl.NumberFormat("id-ID").format(p);
 
-      {/* Header */}
-      <div className="bg-gradient-to-r from-[#333fa1] to-[#000f89] text-white p-4">
-        <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => navigate("/")}
-            className="p-2 hover:bg-white/20 rounded-lg"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <h1 className="text-lg font-bold">
-            {lang === "id" ? "Profil Saya" : "My Profile"}
-          </h1>
-        </div>
+    const showMessage = (type, text) => {
+        setToast({ message: text, type });
+        setTimeout(() => setToast({ message: "", type: "" }), 3000);
+    };
 
-        {/* User Info */}
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
-            <User size={32} />
-          </div>
-          <div className="flex-1">
-            <p className="font-semibold text-lg">{name || "User"}</p>
-            <p className="text-[#cccfe7] text-sm flex items-center gap-1">
-              <Mail size={14} />
-              {user?.email || "user@example.com"}
-            </p>
-          </div>
-        </div>
-      </div>
+    // --- VALIDASI FILE DI SINI ---
+    const onFileChange = async (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const file = e.target.files[0];
 
-      {/* Stats */}
-      <div className="p-4 -mt-4">
-        <div className="bg-white rounded-xl shadow-sm border p-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                <ShoppingBag size={20} className="text-[#666fb8]" />
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{totalOrders}</p>
-              <p className="text-xs text-gray-500">
-                {lang === "id" ? "Total Pesanan" : "Total Orders"}
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                <Package size={20} className="text-purple-600" />
-              </div>
-              <p className="text-2xl font-bold text-gray-900">
-                Rp {formatPrice(totalSpent)}
-              </p>
-              <p className="text-xs text-gray-500">
-                {lang === "id" ? "Total Belanja" : "Total Spent"}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Edit Profile Section */}
-      <div className="p-4">
-        <h2 className="font-semibold mb-3">
-          {lang === "id" ? "Informasi Akun" : "Account Information"}
-        </h2>
-
-        {/* Edit Name */}
-        <div className="bg-white rounded-xl border p-4 mb-3">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-gray-700">
-              {lang === "id" ? "Nama Lengkap" : "Full Name"}
-            </label>
-            {!isEditingName && (
-              <button
-                onClick={() => setIsEditingName(true)}
-                className="p-1.5 hover:bg-gray-100 rounded-lg"
-              >
-                <Edit2 size={16} className="text-blue-500" />
-              </button>
-            )}
-          </div>
-
-          {isEditingName ? (
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-[#666fb8]"
-                placeholder={lang === "id" ? "Masukkan nama" : "Enter name"}
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setIsEditingName(false);
-                    setName(user?.user_metadata?.name || "");
-                  }}
-                  className="flex-1 px-3 py-2 border rounded-lg hover:bg-gray-50 text-sm"
-                  disabled={loading}
-                >
-                  <X size={16} className="inline mr-1" />
-                  {lang === "id" ? "Batal" : "Cancel"}
-                </button>
-                <button
-                  onClick={handleUpdateName}
-                  className="flex-1 px-3 py-2 bg-[#666fb8] text-white rounded-lg hover:bg-[#555ea8] text-sm disabled:opacity-50"
-                  disabled={loading}
-                >
-                  <Save size={16} className="inline mr-1" />
-                  {loading
-                    ? lang === "id"
-                      ? "Menyimpan..."
-                      : "Saving..."
-                    : lang === "id"
-                    ? "Simpan"
-                    : "Save"}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <p className="text-gray-900 font-medium">{name || "-"}</p>
-          )}
-        </div>
-
-        {/* Edit Password */}
-        <div className="bg-white rounded-xl border p-4">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-gray-700">
-              {lang === "id" ? "Password" : "Password"}
-            </label>
-            {!isEditingPassword && (
-              <button
-                onClick={() => setIsEditingPassword(true)}
-                className="p-1.5 hover:bg-gray-100 rounded-lg"
-              >
-                <Edit2 size={16} className="text-blue-500" />
-              </button>
-            )}
-          </div>
-
-          {isEditingPassword ? (
-            <div className="space-y-3">
-              <div className="relative">
-                <Lock
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-[#666fb8]"
-                  placeholder={
-                    lang === "id" ? "Password baru" : "New password"
-                  }
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
-                >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              <div className="relative">
-                <Lock
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-[#666fb8]"
-                  placeholder={
+            // 1. Validasi Ukuran File (Maks 5MB)
+            const maxSize = 5 * 1024 * 1024; // 5MB dalam bytes
+            if (file.size > maxSize) {
+                showMessage(
+                    "error",
                     lang === "id"
-                      ? "Konfirmasi password"
-                      : "Confirm password"
-                  }
-                  minLength={6}
+                        ? "Ukuran file terlalu besar! Maksimal 5MB."
+                        : "File too large! Max 5MB."
+                );
+                e.target.value = null; // Reset input
+                return;
+            }
+
+            // 2. Validasi Tipe File (Hanya JPG, JPEG, PNG)
+            const allowedTypes = ["image/jpeg", "image/jpg", "image/png"];
+            if (!allowedTypes.includes(file.type)) {
+                showMessage(
+                    "error",
+                    lang === "id"
+                        ? "Format file tidak didukung! Gunakan JPG atau PNG."
+                        : "Invalid file format! Use JPG or PNG."
+                );
+                e.target.value = null; // Reset input
+                return;
+            }
+
+            // Jika lolos validasi
+            setImageType(file.type);
+            const reader = new FileReader();
+            reader.addEventListener("load", () => {
+                setImageSrc(reader.result);
+                setShowCropModal(true);
+            });
+            reader.readAsDataURL(file);
+
+            e.target.value = null;
+        }
+    };
+
+    const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
+        setCroppedAreaPixels(croppedAreaPixels);
+    }, []);
+
+    const handleSaveCrop = async () => {
+        if (!imageSrc || !croppedAreaPixels) return;
+
+        setUploadingPhoto(true);
+        try {
+            const croppedBlob = await getCroppedImg(
+                imageSrc,
+                croppedAreaPixels,
+                imageType
+            );
+            const extension = imageType.split("/")[1] || "jpeg";
+            const fileName = `avatar-${Date.now()}.${extension}`;
+
+            const fileToUpload = new File([croppedBlob], fileName, {
+                type: imageType,
+            });
+
+            await uploadAvatar(fileToUpload, user.id);
+            await refreshProfile();
+
+            setShowCropModal(false);
+            setImageSrc(null);
+            showMessage(
+                "success",
+                lang === "id" ? "Foto berhasil disimpan!" : "Photo saved!"
+            );
+        } catch (e) {
+            console.error("Upload Error Log:", e);
+            showMessage(
+                "error",
+                lang === "id"
+                    ? "Gagal menyimpan foto."
+                    : "Failed to save photo."
+            );
+        } finally {
+            setUploadingPhoto(false);
+        }
+    };
+
+    const handleUpdateName = async () => {
+        if (!name.trim())
+            return showMessage("error", "Nama tidak boleh kosong");
+        setLoading(true);
+        try {
+            await supabase.auth.updateUser({ data: { name: name.trim() } });
+            await supabase
+                .from("user_profiles")
+                .update({ name: name.trim() })
+                .eq("id", user.id);
+            await refreshProfile();
+            showMessage("success", "Nama diperbarui!");
+            setIsEditingName(false);
+        } catch (err) {
+            showMessage("error", err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleUpdatePassword = async () => {
+        if (newPassword.length < 6)
+            return showMessage("error", "Min 6 karakter");
+        if (newPassword !== confirmPassword)
+            return showMessage("error", "Password tidak cocok");
+        setLoading(true);
+        try {
+            const { error } = await supabase.auth.updateUser({
+                password: newPassword,
+            });
+            if (error) throw error;
+            showMessage("success", "Password berhasil diperbarui!");
+            setIsEditingPassword(false);
+            setNewPassword("");
+            setConfirmPassword("");
+        } catch (err) {
+            showMessage("error", err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLogout = async () => {
+        await signOut();
+        navigate("/");
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-50">
+            {toast.message && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast({ message: "", type: "" })}
                 />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setIsEditingPassword(false);
-                    setNewPassword("");
-                    setConfirmPassword("");
-                  }}
-                  className="flex-1 px-3 py-2 border rounded-lg hover:bg-gray-50 text-sm"
-                  disabled={loading}
-                >
-                  <X size={16} className="inline mr-1" />
-                  {lang === "id" ? "Batal" : "Cancel"}
-                </button>
-                <button
-                  onClick={handleUpdatePassword}
-                  className="flex-1 px-3 py-2 bg-[#666fb8] text-white rounded-lg hover:bg-[#555ea8] text-sm disabled:opacity-50"
-                  disabled={loading}
-                >
-                  <Save size={16} className="inline mr-1" />
-                  {loading
-                    ? lang === "id"
-                      ? "Menyimpan..."
-                      : "Saving..."
-                    : lang === "id"
-                    ? "Simpan"
-                    : "Save"}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <p className="text-gray-900 font-medium">••••••••</p>
-          )}
-        </div>
-      </div>
+            )}
 
-      {/* Order History */}
-      <div className="p-4">
-        <h2 className="font-semibold mb-3">
-          {lang === "id" ? "Riwayat Pesanan" : "Order History"}
-        </h2>
-        <div className="space-y-3">
-          {orders.map((order) => (
-            <div key={order.id} className="bg-white rounded-xl border p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-medium">Order #{order.id}</p>
-                <span className="px-2 py-0.5 bg-green-100 text-[#333fa1] text-xs rounded-full">
-                  {order.status === "completed"
-                    ? lang === "id"
-                      ? "Selesai"
-                      : "Completed"
-                    : order.status}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-sm text-gray-500">
-                <span>{formatDate(order.date)}</span>
-                <span>{order.items} item</span>
-              </div>
-              <div className="mt-2 pt-2 border-t">
-                <p className="font-bold text-[#666fb8]">
-                  Rp {formatPrice(order.total)}
-                </p>
-              </div>
+            {/* Header */}
+            <div
+                className="text-white p-4 pb-24 transition-all duration-500"
+                style={{
+                    background:
+                        theme?.bgGradient ||
+                        "linear-gradient(to right, #333fa1, #000f89)",
+                }}
+            >
+                <div className="flex items-center gap-3 mb-6">
+                    <button
+                        onClick={() => navigate("/")}
+                        className="p-2 hover:bg-white/20 rounded-lg"
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                    <h1 className="text-lg font-bold">
+                        {lang === "id" ? "Profil Saya" : "My Profile"}
+                    </h1>
+                </div>
             </div>
-          ))}
 
-          {orders.length === 0 && (
-            <div className="text-center py-8 bg-white rounded-xl border">
-              <ShoppingBag size={40} className="mx-auto text-gray-300 mb-2" />
-              <p className="text-gray-500">
-                {lang === "id" ? "Belum ada pesanan" : "No orders yet"}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+            {/* Profile Card */}
+            <div className="px-4 -mt-20">
+                <div className="bg-white rounded-2xl shadow-lg border p-6 flex flex-col items-center text-center relative">
+                    <div className="relative mb-4 group">
+                        <div className="w-24 h-24 rounded-full border-4 border-white shadow-md overflow-hidden bg-gray-100 flex items-center justify-center relative">
+                            {profile?.avatar_url ? (
+                                <img
+                                    key={profile.avatar_url}
+                                    src={`${
+                                        profile.avatar_url
+                                    }?t=${Date.now()}`}
+                                    alt="Profile"
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.src =
+                                            "https://via.placeholder.com/150?text=User";
+                                    }}
+                                />
+                            ) : (
+                                <User size={40} className="text-gray-400" />
+                            )}
 
-      {/* Settings */}
-      <div className="p-4">
-        <h2 className="font-semibold mb-3">
-          {lang === "id" ? "Pengaturan" : "Settings"}
-        </h2>
-        <div className="bg-white rounded-xl border overflow-hidden">
-          <button
-            onClick={toggleLang}
-            className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
-          >
-            <div className="flex items-center gap-3">
-              <Globe size={20} className="text-gray-500" />
-              <span>{lang === "id" ? "Bahasa" : "Language"}</span>
+                            {uploadingPhoto && (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
+                                    <Loader2
+                                        size={24}
+                                        className="text-white animate-spin"
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        <label
+                            className="absolute bottom-0 right-0 p-2 text-white rounded-full shadow-md cursor-pointer hover:opacity-90 transition-colors z-20"
+                            style={{ background: theme?.primary || "#666fb8" }}
+                        >
+                            <Camera size={16} />
+                            <input
+                                type="file"
+                                accept="image/png, image/jpeg, image/jpg" // Filter di dialog OS
+                                className="hidden"
+                                onChange={onFileChange}
+                                disabled={uploadingPhoto}
+                            />
+                        </label>
+                    </div>
+
+                    <h2 className="text-xl font-bold text-gray-900">
+                        {profile?.name || user?.user_metadata?.name || "User"}
+                    </h2>
+                    <p className="text-gray-500 text-sm">
+                        {profile?.email || user?.email}
+                    </p>
+                    <span className="mt-2 px-3 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full uppercase tracking-wider">
+                        {profile?.role || "User"}
+                    </span>
+                </div>
             </div>
-            <span className="text-gray-500">
-              {lang === "id" ? "Indonesia" : "English"}
-            </span>
-          </button>
-          <hr />
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 p-4 text-red-600 hover:bg-red-50"
-          >
-            <LogOut size={20} />
-            <span>{lang === "id" ? "Keluar" : "Logout"}</span>
-          </button>
+
+            {/* Stats */}
+            <div className="p-4">
+                <div className="bg-white rounded-xl shadow-sm border p-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-2">
+                            <p
+                                className="text-2xl font-bold"
+                                style={{ color: theme?.primary }}
+                            >
+                                {totalOrders}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                                {lang === "id"
+                                    ? "Total Pesanan"
+                                    : "Total Orders"}
+                            </p>
+                        </div>
+                        <div className="text-center p-2 border-l">
+                            <p className="text-2xl font-bold text-green-600">
+                                Rp {formatPrice(totalSpent)}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                                {lang === "id"
+                                    ? "Total Belanja"
+                                    : "Total Spent"}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Forms */}
+            <div className="p-4 space-y-4">
+                <h3 className="font-semibold text-gray-900">
+                    {lang === "id" ? "Edit Informasi" : "Edit Information"}
+                </h3>
+
+                {/* Name Form */}
+                <div className="bg-white rounded-xl border p-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="text-sm font-medium text-gray-700">
+                            {lang === "id" ? "Nama Lengkap" : "Full Name"}
+                        </label>
+                        <button
+                            onClick={() => setIsEditingName(!isEditingName)}
+                            style={{ color: theme?.primary }}
+                        >
+                            <Edit2 size={16} />
+                        </button>
+                    </div>
+                    {isEditingName ? (
+                        <div className="flex gap-2 mt-2">
+                            <input
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                className="flex-1 px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2"
+                                style={{ focusRingColor: theme?.primary }}
+                            />
+                            <button
+                                onClick={handleUpdateName}
+                                disabled={loading}
+                                className="px-3 py-2 text-white rounded-lg text-sm"
+                                style={{ background: theme?.buttonBg }}
+                            >
+                                <Save size={16} />
+                            </button>
+                        </div>
+                    ) : (
+                        <p className="text-gray-800">{name}</p>
+                    )}
+                </div>
+
+                {/* Password Form */}
+                <div className="bg-white rounded-xl border p-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="text-sm font-medium text-gray-700">
+                            Password
+                        </label>
+                        <button
+                            onClick={() =>
+                                setIsEditingPassword(!isEditingPassword)
+                            }
+                            style={{ color: theme?.primary }}
+                        >
+                            <Edit2 size={16} />
+                        </button>
+                    </div>
+                    {isEditingPassword ? (
+                        <div className="space-y-2 mt-2">
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="New Password"
+                                    value={newPassword}
+                                    onChange={(e) =>
+                                        setNewPassword(e.target.value)
+                                    }
+                                    className="w-full px-3 py-2 border rounded-lg text-sm pr-10 outline-none focus:ring-2"
+                                />
+                                <button
+                                    onClick={() =>
+                                        setShowPassword(!showPassword)
+                                    }
+                                    className="absolute right-3 top-2 text-gray-400"
+                                >
+                                    {showPassword ? (
+                                        <EyeOff size={16} />
+                                    ) : (
+                                        <Eye size={16} />
+                                    )}
+                                </button>
+                            </div>
+                            <input
+                                type={showPassword ? "text" : "password"}
+                                placeholder="Confirm Password"
+                                value={confirmPassword}
+                                onChange={(e) =>
+                                    setConfirmPassword(e.target.value)
+                                }
+                                className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2"
+                            />
+                            <button
+                                onClick={handleUpdatePassword}
+                                disabled={loading}
+                                className="w-full py-2 text-white rounded-lg text-sm"
+                                style={{ background: theme?.buttonBg }}
+                            >
+                                {lang === "id"
+                                    ? "Simpan Password"
+                                    : "Save Password"}
+                            </button>
+                        </div>
+                    ) : (
+                        <p className="text-gray-800">••••••••</p>
+                    )}
+                </div>
+            </div>
+
+            {/* Settings */}
+            <div className="p-4 pb-10">
+                <h3 className="font-semibold text-gray-900 mb-3">
+                    {lang === "id" ? "Pengaturan Lainnya" : "Other Settings"}
+                </h3>
+                <div className="bg-white rounded-xl border overflow-hidden">
+                    <button
+                        onClick={toggleLang}
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 border-b"
+                    >
+                        <div className="flex items-center gap-3">
+                            <Globe size={20} className="text-gray-500" />
+                            <span>{lang === "id" ? "Bahasa" : "Language"}</span>
+                        </div>
+                        <span className="text-gray-500">
+                            {lang === "id" ? "Indonesia" : "English"}
+                        </span>
+                    </button>
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 p-4 text-red-600 hover:bg-red-50"
+                    >
+                        <LogOut size={20} />
+                        <span>{lang === "id" ? "Keluar" : "Logout"}</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* --- CROP MODAL --- */}
+            <Modal
+                isOpen={showCropModal}
+                onClose={() => {
+                    setShowCropModal(false);
+                    setImageSrc(null);
+                }}
+                title={lang === "id" ? "Sesuaikan Foto" : "Adjust Photo"}
+            >
+                <div className="space-y-4">
+                    <div className="relative w-full h-64 bg-gray-900 rounded-lg overflow-hidden">
+                        <Cropper
+                            image={imageSrc}
+                            crop={crop}
+                            zoom={zoom}
+                            aspect={1}
+                            onCropChange={setCrop}
+                            onCropComplete={onCropComplete}
+                            onZoomChange={setZoom}
+                            cropShape="round"
+                            showGrid={false}
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-2 px-2">
+                        <ZoomIn size={16} className="text-gray-500" />
+                        <input
+                            type="range"
+                            value={zoom}
+                            min={1}
+                            max={3}
+                            step={0.1}
+                            onChange={(e) => setZoom(e.target.value)}
+                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        />
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
+                        <button
+                            onClick={() => {
+                                setShowCropModal(false);
+                                setImageSrc(null);
+                            }}
+                            className="flex-1 px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50"
+                        >
+                            {lang === "id" ? "Batal" : "Cancel"}
+                        </button>
+                        <button
+                            onClick={handleSaveCrop}
+                            disabled={uploadingPhoto}
+                            className="flex-1 px-4 py-2 text-white rounded-lg flex items-center justify-center gap-2"
+                            style={{ background: theme?.buttonBg || "#666fb8" }}
+                        >
+                            {uploadingPhoto ? (
+                                <Loader2 className="animate-spin" size={18} />
+                            ) : (
+                                <Check size={18} />
+                            )}
+                            {lang === "id" ? "Simpan" : "Save"}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
-      </div>
-    </div>
-  );
+    );
 }
 
 export default UserProfile;

@@ -5,31 +5,31 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
-    const [userRole, setUserRole] = useState(null);
+    const [profile, setProfile] = useState(null); // Ganti userRole dengan object profile lengkap
     const [loading, setLoading] = useState(true);
 
-    // Fungsi helper untuk mengambil role user dari tabel user_profiles
-    const fetchUserRole = async (userId) => {
+    // Fetch profil lengkap (role, name, avatar_url)
+    const fetchUserProfile = async (userId) => {
         try {
             const { data, error } = await supabase
                 .from("user_profiles")
-                .select("role")
+                .select("*")
                 .eq("id", userId)
                 .single();
 
             if (data) {
-                setUserRole(data.role);
+                setProfile(data);
             } else {
-                setUserRole("user"); // Default
+                // Fallback default
+                setProfile({ role: "user", name: "", avatar_url: "" });
             }
         } catch (err) {
-            console.error("Fetch role error:", err);
-            setUserRole("user");
+            console.error("Fetch profile error:", err);
         }
     };
 
     useEffect(() => {
-        // 1. Cek sesi saat ini (Initial Load)
+        // 1. Cek sesi saat ini
         const initSession = async () => {
             try {
                 const {
@@ -37,10 +37,10 @@ export function AuthProvider({ children }) {
                 } = await supabase.auth.getSession();
                 if (session?.user) {
                     setUser(session.user);
-                    await fetchUserRole(session.user.id);
+                    await fetchUserProfile(session.user.id);
                 } else {
                     setUser(null);
-                    setUserRole(null);
+                    setProfile(null);
                 }
             } catch (error) {
                 console.error("Session check error:", error);
@@ -51,12 +51,10 @@ export function AuthProvider({ children }) {
 
         initSession();
 
-        // 2. Dengarkan perubahan Auth secara Realtime
+        // 2. Listener Auth Realtime
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log("Auth Event:", event); // Debugging
-
             if (
                 event === "SIGNED_IN" ||
                 event === "TOKEN_REFRESHED" ||
@@ -64,14 +62,11 @@ export function AuthProvider({ children }) {
             ) {
                 if (session?.user) {
                     setUser(session.user);
-                    // Hanya fetch role jika belum ada atau user berubah
-                    if (session.user.id !== user?.id) {
-                        await fetchUserRole(session.user.id);
-                    }
+                    await fetchUserProfile(session.user.id);
                 }
             } else if (event === "SIGNED_OUT" || event === "USER_DELETED") {
                 setUser(null);
-                setUserRole(null);
+                setProfile(null);
                 setLoading(false);
             }
         });
@@ -90,7 +85,6 @@ export function AuthProvider({ children }) {
             });
             if (error) throw error;
 
-            // Buat profile manual jika trigger database gagal/belum diset
             if (data.user) {
                 await supabase.from("user_profiles").upsert({
                     id: data.user.id,
@@ -121,28 +115,25 @@ export function AuthProvider({ children }) {
     const signOut = async () => {
         await supabase.auth.signOut();
         setUser(null);
-        setUserRole(null);
+        setProfile(null);
     };
 
-    // Helper untuk refresh session manual jika diperlukan
-    const refreshSession = async () => {
-        const { data, error } = await supabase.auth.refreshSession();
-        if (data.session) {
-            setUser(data.session.user);
-            return true;
+    // Helper untuk refresh data profil manual (dipanggil setelah upload foto)
+    const refreshProfile = async () => {
+        if (user) {
+            await fetchUserProfile(user.id);
         }
-        return false;
     };
 
-    const isAdmin = userRole === "admin";
-    const isUser = userRole === "user";
+    const isAdmin = profile?.role === "admin";
+    const isUser = profile?.role === "user";
     const isAuthenticated = !!user;
 
     return (
         <AuthContext.Provider
             value={{
                 user,
-                userRole,
+                profile, // Objekt profil lengkap diexpose
                 loading,
                 isAdmin,
                 isUser,
@@ -150,7 +141,7 @@ export function AuthProvider({ children }) {
                 signUp,
                 signIn,
                 signOut,
-                refreshSession,
+                refreshProfile, // Fungsi baru
             }}
         >
             {children}

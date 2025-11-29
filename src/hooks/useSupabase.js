@@ -6,11 +6,11 @@ const STORAGE_BUCKET = "bookletku";
 
 export function useSupabase() {
     const [items, setItems] = useState([]);
-    const [settings, setSettingsState] = useState(null); // Ubah initial state jadi null agar ketahuan loading
+    const [settings, setSettingsState] = useState(null);
     const [customCategories, setCustomCategories] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // --- Helper: Handle Auth Errors ---
+    // --- Helper: Handle Auth Errors (Anti-Bug Session) ---
     const handleSupabaseError = async (error) => {
         console.error("Supabase Operation Error:", error);
         // Jika error karena JWT expired
@@ -19,7 +19,6 @@ export function useSupabase() {
             const { data, error: refreshError } =
                 await supabase.auth.refreshSession();
             if (refreshError || !data.session) {
-                // Jika refresh gagal, redirect ke login (opsional: window.location.reload())
                 window.location.href = "/login";
                 return false;
             }
@@ -85,6 +84,7 @@ export function useSupabase() {
             if (data) {
                 setSettingsState({
                     storeName: data.name,
+                    // Pastikan nama kolom sesuai database (store_location, operating_hours)
                     storeLocation: data.store_location || "",
                     operatingHours: data.operating_hours || "",
                     whatsappNumber: data.whatsapp_number,
@@ -126,9 +126,9 @@ export function useSupabase() {
             mounted = false;
             supabase.removeChannel(channel);
         };
-    }, []); // Empty dependency array = run once
+    }, []);
 
-    // --- CRUD Actions ---
+    // --- CRUD Actions (Menu Items) ---
 
     const addItem = async (itemData) => {
         try {
@@ -148,13 +148,11 @@ export function useSupabase() {
                 .single();
 
             if (error) throw error;
-            await fetchItems(); // Refresh local state
+            await fetchItems();
             return data;
         } catch (err) {
-            // Coba refresh token jika error auth, lalu coba lagi sekali
             const refreshed = await handleSupabaseError(err);
             if (refreshed) {
-                // Retry logic could be added here, but usually UI retry is safer
                 alert("Sesi diperbarui. Silakan coba simpan lagi.");
             }
             throw err;
@@ -176,7 +174,6 @@ export function useSupabase() {
                 .eq("id", id);
 
             if (error) throw error;
-            // Optimistic update handled by fetchItems via realtime or manual call
             await fetchItems();
         } catch (err) {
             await handleSupabaseError(err);
@@ -195,7 +192,7 @@ export function useSupabase() {
     };
 
     const reorderItems = async (newItems) => {
-        setItems(newItems); // Optimistic UI update
+        setItems(newItems);
         try {
             const updates = newItems.map((item, index) => ({
                 id: item.id,
@@ -207,10 +204,11 @@ export function useSupabase() {
             if (error) throw error;
         } catch (err) {
             await handleSupabaseError(err);
-            await fetchItems(); // Revert on error
+            await fetchItems();
         }
     };
 
+    // --- Upload Foto Menu ---
     const uploadPhoto = async (file) => {
         try {
             const ext = file.name.split(".").pop();
@@ -233,12 +231,58 @@ export function useSupabase() {
         }
     };
 
+    // --- BARU: Upload Avatar Profil ---
+    const uploadAvatar = async (file, userId) => {
+        try {
+            // 1. Deteksi ekstensi dari tipe file (lebih aman) atau nama file
+            const fileExt = file.name.split(".").pop();
+            const fileName = `avatars/${userId}-${Date.now()}.${fileExt}`;
+
+            // 2. Upload ke Storage
+            const { error } = await supabase.storage
+                .from(STORAGE_BUCKET)
+                .upload(fileName, file, {
+                    upsert: true,
+                    contentType: file.type, // Gunakan tipe asli file (image/png, image/jpeg, dll)
+                    cacheControl: "3600",
+                });
+
+            if (error) {
+                console.error("Supabase Storage Error:", error);
+                throw error;
+            }
+
+            // 3. Ambil URL Publik
+            const { data } = supabase.storage
+                .from(STORAGE_BUCKET)
+                .getPublicUrl(fileName);
+
+            // 4. Update tabel user_profiles
+            const { error: updateError } = await supabase
+                .from("user_profiles")
+                .update({
+                    avatar_url: data.publicUrl,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", userId);
+
+            if (updateError) throw updateError;
+
+            return { url: data.publicUrl };
+        } catch (err) {
+            await handleSupabaseError(err);
+            throw err;
+        }
+    };
+    
+    // --- Save Settings ---
     const setSettings = async (s) => {
         try {
             const { error } = await supabase
                 .from("stores")
                 .update({
                     name: s.storeName,
+                    // Pastikan nama kolom sesuai database
                     store_location: s.storeLocation,
                     operating_hours: s.operatingHours,
                     whatsapp_number: s.whatsappNumber,
@@ -247,7 +291,7 @@ export function useSupabase() {
                 .eq("id", DEFAULT_STORE_ID);
 
             if (error) throw error;
-            setSettingsState(s); // Update local
+            setSettingsState(s);
         } catch (err) {
             const refreshed = await handleSupabaseError(err);
             if (refreshed) {
@@ -261,7 +305,7 @@ export function useSupabase() {
 
     return {
         items,
-        settings: settings || {}, // Ensure not null for UI
+        settings: settings || {},
         customCategories,
         loading,
         addItem,
@@ -269,6 +313,7 @@ export function useSupabase() {
         deleteItem,
         reorderItems,
         uploadPhoto,
+        uploadAvatar, // <--- Sudah di-return untuk dipakai di UserProfile
         setSettings,
         refetch: fetchItems,
     };

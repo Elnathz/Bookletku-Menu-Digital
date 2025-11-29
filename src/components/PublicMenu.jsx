@@ -29,7 +29,6 @@ import Toast from "./Toast";
 // --- Components ---
 
 function Badge({ children, variant }) {
-    // Badge tetap vibrant agar mencolok
     const cls =
         variant === "trending"
             ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white"
@@ -56,7 +55,6 @@ function MenuItemCardLarge({ item, onClick, theme }) {
         <div
             onClick={onClick}
             className="bg-white rounded-2xl border overflow-hidden cursor-pointer hover:shadow-lg active:scale-[0.99] transition-transform duration-150 group"
-            // Hover border effect mengikuti warna tema
             style={{
                 borderColor: "transparent",
                 boxShadow:
@@ -77,7 +75,6 @@ function MenuItemCardLarge({ item, onClick, theme }) {
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                        {/* Icon Placeholder Warnanya Mengikuti Tema */}
                         <ImageIcon
                             size={36}
                             className="opacity-30"
@@ -110,7 +107,6 @@ function MenuItemCardLarge({ item, onClick, theme }) {
                     </p>
                 )}
                 <div className="flex items-center justify-between mt-3">
-                    {/* HARGA WARNA-WARNI */}
                     <p
                         className="font-bold text-lg"
                         style={{ color: theme.priceColor }}
@@ -187,7 +183,6 @@ function ItemDetailModal({ item, isOpen, onClose, onAdd, theme }) {
                     <h2 className="text-xl font-bold text-gray-900">
                         {item.name}
                     </h2>
-                    {/* Harga Detail Modal */}
                     <p
                         className="text-2xl font-bold mt-2"
                         style={{ color: theme.priceColor }}
@@ -207,7 +202,6 @@ function ItemDetailModal({ item, isOpen, onClose, onAdd, theme }) {
                         </label>
 
                         <div className="flex items-center gap-4">
-                            {/* Tombol Minus */}
                             <button
                                 onClick={() =>
                                     setQuantity(Math.max(1, quantity - 1))
@@ -225,7 +219,6 @@ function ItemDetailModal({ item, isOpen, onClose, onAdd, theme }) {
                                 {quantity}
                             </span>
 
-                            {/* Tombol Plus */}
                             <button
                                 onClick={() => setQuantity(quantity + 1)}
                                 className="w-10 h-10 flex items-center justify-center border rounded-lg transition-colors hover:bg-gray-50"
@@ -255,7 +248,6 @@ function ItemDetailModal({ item, isOpen, onClose, onAdd, theme }) {
                                     : "e.g. spicy, no vegetables..."
                             }
                             className="w-full px-4 py-2.5 border rounded-lg outline-none transition-all"
-                            // Focus ring mengikuti tema
                             style={{
                                 borderColor: "#e5e7eb",
                                 boxShadow: note
@@ -265,7 +257,6 @@ function ItemDetailModal({ item, isOpen, onClose, onAdd, theme }) {
                         />
                     </div>
 
-                    {/* Tombol Add to Cart */}
                     <button
                         onClick={handleAdd}
                         className="w-full mt-5 flex items-center justify-center gap-2 text-white py-3 rounded-xl font-semibold shadow-md transition-transform active:scale-[0.98]"
@@ -295,7 +286,7 @@ function OrderTypeModal({ isOpen, onClose, onSelect, theme }) {
             label: lang === "id" ? "Makan di Tempat" : "Dine In",
             desc:
                 lang === "id" ? "Nikmati di tempat kami" : "Enjoy at our place",
-            color: "from-orange-500 to-red-500", // Icon background gradients (static)
+            color: "from-orange-500 to-red-500",
         },
         {
             id: "takeaway",
@@ -323,7 +314,6 @@ function OrderTypeModal({ isOpen, onClose, onSelect, theme }) {
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="p-6 text-center">
-                    {/* Icon Header Modal mengikuti tema */}
                     <div
                         className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 bg-opacity-10"
                         style={{ backgroundColor: `${theme.primary}20` }}
@@ -398,12 +388,11 @@ const DEFAULT_CATEGORIES = [
 
 export default function PublicMenu() {
     const { items = [], settings = {}, loading, updateItem } = useSupabase();
-    const { user, isAuthenticated, isAdmin, signOut } = useAuth();
+    const { user, isAuthenticated, isAdmin, signOut, profile } = useAuth();
     const { t = {}, lang, toggleLang } = useLanguage();
-    const { theme } = useTemplate(); // Get Dynamic Theme
+    const { theme } = useTemplate();
     const navigate = useNavigate();
 
-    // UI State
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("all");
     const [cart, setCart] = useState([]);
@@ -415,7 +404,6 @@ export default function PublicMenu() {
     const [toast, setToast] = useState({ message: "", type: "" });
     const [showUserMenu, setShowUserMenu] = useState(false);
 
-    // Derived Values & Helper Functions
     const categories = useMemo(() => {
         if (!items) return ["all"];
         const derived = [
@@ -453,7 +441,6 @@ export default function PublicMenu() {
         return s.charAt(0).toUpperCase() + s.slice(1);
     };
 
-    // Cart Logic
     const addToCart = (item, qty = 1, note = "") => {
         setCart((prev) => {
             const existingIndex = prev.findIndex(
@@ -512,7 +499,6 @@ export default function PublicMenu() {
             return;
         }
 
-        // Generate Message
         const storeName = settings?.storeName || "Store";
         const lines = [];
         lines.push(`*Order from ${storeName}*`);
@@ -539,7 +525,6 @@ export default function PublicMenu() {
         window.open(url, "_blank");
     };
 
-    // Filter Items
     const filteredGroups = useMemo(() => {
         if (!items) return [];
         const q = (searchQuery || "").trim().toLowerCase();
@@ -601,14 +586,30 @@ export default function PublicMenu() {
                             </span>
                         </button>
 
-                        {/* Profile Dropdown */}
+                        {/* PROFILE DROPDOWN - WITH AVATAR */}
                         <div className="relative">
                             <button
                                 onClick={() => setShowUserMenu(!showUserMenu)}
-                                className="p-2 hover:bg-white/20 rounded-md transition-colors"
+                                className="p-0.5 hover:bg-white/20 rounded-full transition-colors flex items-center justify-center"
+                                style={{ width: "48px", height: "48px" }} // DIPERBESAR JADI 48px
                             >
-                                <User size={20} />
+                                {profile?.avatar_url ? (
+                                    <img
+                                        src={profile.avatar_url}
+                                        alt="User"
+                                        className="w-full h-full rounded-full object-cover border-2 border-white/50 shadow-sm"
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.style.display = "none";
+                                            e.target.src =
+                                                "https://via.placeholder.com/150?text=User";
+                                        }}
+                                    />
+                                ) : (
+                                    <User size={24} className="text-white" />
+                                )}
                             </button>
+
                             {showUserMenu && (
                                 <>
                                     <div
@@ -622,10 +623,9 @@ export default function PublicMenu() {
                                                     <p className="text-sm font-medium text-gray-900 truncate">
                                                         {user?.email}
                                                     </p>
-                                                    <p className="text-xs text-gray-500">
-                                                        {isAdmin
-                                                            ? "Admin"
-                                                            : "User"}
+                                                    <p className="text-xs text-gray-500 capitalize">
+                                                        {profile?.role ||
+                                                            "User"}
                                                     </p>
                                                 </div>
                                                 {isAdmin && (
@@ -727,7 +727,7 @@ export default function PublicMenu() {
                 )}
             </header>
 
-            {/* Search Bar - DYNAMIC FOCUS RING */}
+            {/* Search & Categories */}
             <div className="max-w-5xl mx-auto px-4 pt-5">
                 <input
                     type="text"
@@ -744,7 +744,6 @@ export default function PublicMenu() {
                 />
             </div>
 
-            {/* Categories - DYNAMIC ACTIVE BACKGROUND */}
             <div className="max-w-5xl mx-auto px-4 py-4 overflow-x-auto flex gap-3 no-scrollbar">
                 {categories.map((cat) => (
                     <button
@@ -892,7 +891,6 @@ export default function PublicMenu() {
                                             <h4 className="font-medium text-gray-900">
                                                 {it.name}
                                             </h4>
-                                            {/* Cart Item Price - DYNAMIC COLOR */}
                                             <div
                                                 className="text-sm font-semibold"
                                                 style={{
@@ -969,7 +967,6 @@ export default function PublicMenu() {
                                     </div>
                                 </div>
                                 <div className="w-40">
-                                    {/* Checkout Button - DYNAMIC BACKGROUND */}
                                     <button
                                         onClick={() => {
                                             if (!selectedOrderType) {
