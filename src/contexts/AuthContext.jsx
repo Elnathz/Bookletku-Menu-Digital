@@ -5,111 +5,120 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
-    const [profile, setProfile] = useState(null); // Ganti userRole dengan object profile lengkap
+    const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // Fetch profil lengkap (role, name, avatar_url)
     const fetchUserProfile = async (userId) => {
         try {
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from("user_profiles")
                 .select("*")
                 .eq("id", userId)
                 .single();
-
-            if (data) {
-                setProfile(data);
-            } else {
-                // Fallback default
-                setProfile({ role: "user", name: "", avatar_url: "" });
-            }
+            setProfile(data || { role: "user", name: "", avatar_url: "" });
         } catch (err) {
-            console.error("Fetch profile error:", err);
+            console.error("Error fetch profile:", err);
         }
     };
 
     useEffect(() => {
-        // 1. Cek sesi saat ini
+        let mounted = true;
+
+        // FUNGSI UTAMA: Cek Sesi saat aplikasi dibuka
         const initSession = async () => {
             try {
-                const {
-                    data: { session },
-                } = await supabase.auth.getSession();
-                if (session?.user) {
-                    setUser(session.user);
-                    await fetchUserProfile(session.user.id);
-                } else {
-                    setUser(null);
-                    setProfile(null);
+                // 1. Coba ambil sesi yang tersimpan
+                // Kita tunggu max 2 detik, kalau macet berarti token bermasalah
+                const { data, error } = await supabase.auth.getSession();
+
+                [cite_start]; // 2. DETEKSI TOKEN RUSAK (KUNCI PERBAIKAN) [cite: 76]
+                // Jika ada error saat ambil sesi (biasanya "Invalid Refresh Token"),
+                // kita harus PAKSA LOGOUT agar aplikasi tidak kirim token sampah lagi.
+                if (error) {
+                    console.warn(
+                        "Sesi kadaluwarsa/rusak. Membersihkan token...",
+                        error.message
+                    );
+                    await supabase.auth.signOut(); // <--- INI SOLUSINYA
+                    if (mounted) {
+                        setUser(null);
+                        setProfile(null);
+                    }
+                    return;
+                }
+
+                // 3. Jika sesi valid, set user
+                if (data.session?.user && mounted) {
+                    setUser(data.session.user);
+                    await fetchUserProfile(data.session.user.id);
                 }
             } catch (error) {
-                console.error("Session check error:", error);
+                console.error("Auth Init Exception:", error);
+                // Jika error parah, pastikan user null agar jadi 'Tamu'
+                if (mounted) setUser(null);
             } finally {
-                setLoading(false);
+                if (mounted) setLoading(false);
             }
         };
 
         initSession();
 
-        // 2. Listener Auth Realtime
+        // Listener Realtime (Login/Logout)
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (
-                event === "SIGNED_IN" ||
-                event === "TOKEN_REFRESHED" ||
-                event === "INITIAL_SESSION"
-            ) {
+            if (mounted) {
+                // Event khusus jika Token Refresh Gagal (misal koneksi putus atau token dicabut)
+                // Kita logout paksa agar UI tidak nge-freeze
+                if (event === "TOKEN_REFRESHED" && !session) {
+                    console.log("Gagal refresh token. Logout otomatis.");
+                    await supabase.auth.signOut();
+                }
+
                 if (session?.user) {
                     setUser(session.user);
-                    await fetchUserProfile(session.user.id);
+                    if (!profile || profile.id !== session.user.id) {
+                        await fetchUserProfile(session.user.id);
+                    }
+                } else {
+                    setUser(null);
+                    setProfile(null);
                 }
-            } else if (event === "SIGNED_OUT" || event === "USER_DELETED") {
-                setUser(null);
-                setProfile(null);
                 setLoading(false);
             }
         });
 
         return () => {
+            mounted = false;
             subscription.unsubscribe();
         };
     }, []);
 
     const signUp = async (email, password, name, role = "user") => {
-        try {
-            const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { name } },
+        });
+        if (error) throw error;
+        if (data.user) {
+            await supabase.from("user_profiles").upsert({
+                id: data.user.id,
                 email,
-                password,
-                options: { data: { name } },
+                name,
+                role,
             });
-            if (error) throw error;
-
-            if (data.user) {
-                await supabase.from("user_profiles").upsert({
-                    id: data.user.id,
-                    email,
-                    name,
-                    role,
-                });
-            }
-            return { data, error: null };
-        } catch (err) {
-            return { data: null, error: err };
         }
+        return { data, error: null };
     };
 
     const signIn = async (email, password) => {
-        try {
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
-            if (error) throw error;
-            return { data, error: null };
-        } catch (err) {
-            return { data: null, error: err };
-        }
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+        if (error) throw error;
+        return { data, error: null };
     };
 
     const signOut = async () => {
@@ -118,30 +127,23 @@ export function AuthProvider({ children }) {
         setProfile(null);
     };
 
-    // Helper untuk refresh data profil manual (dipanggil setelah upload foto)
     const refreshProfile = async () => {
-        if (user) {
-            await fetchUserProfile(user.id);
-        }
+        if (user) await fetchUserProfile(user.id);
     };
-
-    const isAdmin = profile?.role === "admin";
-    const isUser = profile?.role === "user";
-    const isAuthenticated = !!user;
 
     return (
         <AuthContext.Provider
             value={{
                 user,
-                profile, // Objekt profil lengkap diexpose
+                profile,
                 loading,
-                isAdmin,
-                isUser,
-                isAuthenticated,
+                isAdmin: profile?.role === "admin",
+                isUser: profile?.role === "user",
+                isAuthenticated: !!user,
                 signUp,
                 signIn,
                 signOut,
-                refreshProfile, // Fungsi baru
+                refreshProfile,
             }}
         >
             {children}
@@ -150,11 +152,7 @@ export function AuthProvider({ children }) {
 }
 
 export function useAuth() {
-    const context = useContext(AuthContext);
-    if (!context) {
-        throw new Error("useAuth must be used within AuthProvider");
-    }
-    return context;
+    return useContext(AuthContext);
 }
 
 export default AuthContext;

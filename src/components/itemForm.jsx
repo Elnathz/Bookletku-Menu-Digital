@@ -1,21 +1,19 @@
 import React, { useState, useCallback } from "react";
-import Cropper from "react-easy-crop"; // Pastikan library ini terinstall
+import Cropper from "react-easy-crop";
 import {
     Upload,
-    X,
-    Loader2,
-    Plus,
     Check,
     Type,
     Tag,
     Star,
     ZoomIn,
-    Maximize,
-    Image as ImageIcon,
+    Loader2,
+    Plus,
+    X,
 } from "lucide-react";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useTemplate } from "../contexts/TemplateContext";
-import Modal from "./Modal"; // Kita gunakan Modal yang sudah ada
+import Modal from "./Modal";
 
 // --- UTILITY: CROP IMAGE ---
 const createImage = (url) =>
@@ -36,7 +34,6 @@ async function getCroppedImg(imageSrc, pixelCrop, mimeType = "image/jpeg") {
 
     canvas.width = pixelCrop.width;
     canvas.height = pixelCrop.height;
-
     ctx.drawImage(
         image,
         pixelCrop.x,
@@ -66,35 +63,42 @@ async function getCroppedImg(imageSrc, pixelCrop, mimeType = "image/jpeg") {
 
 const DEFAULT_CATEGORIES = ["food", "drink", "snack", "dessert", "other"];
 
+// OPSI BADGE YANG BISA DIPILIH
 const BADGE_OPTIONS = [
     {
         value: "",
-        label: "Tidak Ada (None)",
+        label: "Auto / None",
+        desc: "Ikuti jumlah views",
         color: "bg-gray-100 text-gray-600 border-gray-200",
     },
     {
         value: "popular",
         label: "🔥 Popular",
+        desc: "Favorit pelanggan",
         color: "bg-orange-100 text-orange-700 border-orange-200",
     },
     {
         value: "trending",
         label: "📈 Trending",
+        desc: "Sedang naik daun",
         color: "bg-pink-100 text-pink-700 border-pink-200",
     },
     {
         value: "new",
-        label: "✨ Baru (New)",
+        label: "✨ New",
+        desc: "Menu baru",
         color: "bg-blue-100 text-blue-700 border-blue-200",
     },
     {
         value: "bestseller",
         label: "👑 Best Seller",
+        desc: "Paling laris",
         color: "bg-yellow-100 text-yellow-700 border-yellow-200",
     },
     {
         value: "recommended",
         label: "👍 Recommended",
+        desc: "Rekomendasi Chef",
         color: "bg-green-100 text-green-700 border-green-200",
     },
 ];
@@ -117,7 +121,7 @@ export function ItemForm({
         description: item?.description || "",
         category: item?.category || "food",
         photo: item?.photo || "",
-        badge: item?.badge || "",
+        badge: item?.badge || "", // Load badge dari database
     });
 
     const [errors, setErrors] = useState({});
@@ -129,10 +133,10 @@ export function ItemForm({
     const [imageType, setImageType] = useState("image/jpeg");
     const [crop, setCrop] = useState({ x: 0, y: 0 });
     const [zoom, setZoom] = useState(1);
-    const [aspect, setAspect] = useState(4 / 3); // Default aspect ratio
+    const [aspect, setAspect] = useState(4 / 3);
     const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
     const [showCropModal, setShowCropModal] = useState(false);
-    const [uploading, setUploading] = useState(false); // Loading saat upload crop
+    const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState("");
 
     const allCategories = [...DEFAULT_CATEGORIES, ...customCategories];
@@ -149,7 +153,6 @@ export function ItemForm({
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // Validasi awal
         const allowedTypes = [
             "image/jpeg",
             "image/png",
@@ -169,31 +172,26 @@ export function ItemForm({
         const reader = new FileReader();
         reader.addEventListener("load", () => {
             setImageSrc(reader.result);
-            setShowCropModal(true); // Buka modal crop
+            setShowCropModal(true);
             setUploadError("");
         });
         reader.readAsDataURL(file);
-        e.target.value = null; // Reset input agar bisa pilih file sama
+        e.target.value = null;
     };
 
     const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
         setCroppedAreaPixels(croppedAreaPixels);
     }, []);
 
-    // 2. Proses Crop & Upload ke Supabase
     const handleSaveCrop = async () => {
         if (!imageSrc || !croppedAreaPixels) return;
-
         setUploading(true);
         try {
-            // Crop gambar
             const croppedBlob = await getCroppedImg(
                 imageSrc,
                 croppedAreaPixels,
                 imageType
             );
-
-            // Buat nama file
             const ext = imageType.split("/")[1] || "jpg";
             const fileName = `menu-${Date.now()}.${ext}`;
 
@@ -201,13 +199,11 @@ export function ItemForm({
                 type: imageType,
             });
 
-            // Upload via function props
             if (onUploadPhoto) {
                 const result = await onUploadPhoto(fileToUpload);
                 setForm((prev) => ({ ...prev, photo: result.url }));
             }
 
-            // Tutup modal & reset
             setShowCropModal(false);
             setImageSrc(null);
             setZoom(1);
@@ -259,13 +255,13 @@ export function ItemForm({
             description: form.description.trim(),
             category: form.category,
             photo: form.photo,
-            badge: form.badge,
+            badge: form.badge, // <--- Ini yang menyimpan status badge ke database
         });
     };
 
     return (
         <div className="space-y-5">
-            {/* --- PHOTO SECTION --- */}
+            {/* PHOTO SECTION */}
             <div className="flex justify-center">
                 {form.photo ? (
                     <div className="relative group w-full">
@@ -289,9 +285,7 @@ export function ItemForm({
                         </div>
                     </div>
                 ) : (
-                    <label
-                        className={`w-full h-40 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group hover:bg-gray-50 hover:border-gray-400`}
-                    >
+                    <label className="w-full h-40 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 group hover:bg-gray-50 hover:border-gray-400">
                         <div className="p-3 bg-gray-100 rounded-full mb-3 group-hover:scale-110 transition-transform">
                             <Upload size={24} className="text-gray-500" />
                         </div>
@@ -304,7 +298,7 @@ export function ItemForm({
                         <input
                             type="file"
                             accept="image/*"
-                            onChange={handleFileSelect} // <--- Mengarah ke fungsi crop dulu
+                            onChange={handleFileSelect}
                             className="hidden"
                         />
                     </label>
@@ -316,7 +310,7 @@ export function ItemForm({
                 )}
             </div>
 
-            {/* --- FORM FIELDS --- */}
+            {/* FORM FIELDS */}
             <div className="space-y-4">
                 {/* Name */}
                 <div>
@@ -339,14 +333,6 @@ export function ItemForm({
                                     ? "border-red-500 bg-red-50"
                                     : "border-gray-200 bg-gray-50 focus:bg-white"
                             }`}
-                            onFocus={(e) =>
-                                (e.target.style.borderColor = theme?.primary)
-                            }
-                            onBlur={(e) =>
-                                (e.target.style.borderColor = errors.name
-                                    ? "#ef4444"
-                                    : "#e5e7eb")
-                            }
                             placeholder="Contoh: Nasi Goreng Spesial"
                         />
                     </div>
@@ -373,15 +359,6 @@ export function ItemForm({
                                         ? "border-red-500 bg-red-50"
                                         : "border-gray-200 bg-gray-50 focus:bg-white"
                                 }`}
-                                onFocus={(e) =>
-                                    (e.target.style.borderColor =
-                                        theme?.primary)
-                                }
-                                onBlur={(e) =>
-                                    (e.target.style.borderColor = errors.price
-                                        ? "#ef4444"
-                                        : "#e5e7eb")
-                                }
                                 placeholder="0"
                                 min="0"
                             />
@@ -402,13 +379,6 @@ export function ItemForm({
                                     handleChange("category", e.target.value)
                                 }
                                 className="w-full pl-10 pr-8 py-3 border border-gray-200 bg-gray-50 rounded-xl outline-none appearance-none cursor-pointer focus:bg-white transition-all"
-                                onFocus={(e) =>
-                                    (e.target.style.borderColor =
-                                        theme?.primary)
-                                }
-                                onBlur={(e) =>
-                                    (e.target.style.borderColor = "#e5e7eb")
-                                }
                             >
                                 {allCategories.map((cat) => (
                                     <option key={cat} value={cat}>
@@ -451,29 +421,44 @@ export function ItemForm({
                     </div>
                 )}
 
-                {/* Badge Selection */}
+                {/* --- BADGE / LABEL (MANUAL) --- */}
                 <div>
                     <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block ml-1 flex items-center gap-1">
-                        <Star size={12} /> Badge / Label
+                        <Star size={12} /> Label / Badge (Manual)
                     </label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {BADGE_OPTIONS.map((option) => (
                             <button
-                                key={option.value}
+                                key={option.value || "none"}
                                 type="button"
                                 onClick={() =>
                                     handleChange("badge", option.value)
                                 }
-                                className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
+                                className={`px-3 py-2 rounded-lg text-left border transition-all relative overflow-hidden ${
                                     form.badge === option.value
-                                        ? "ring-2 ring-offset-1 " +
-                                          option.color.replace("bg-", "ring-") +
-                                          " " +
-                                          option.color
+                                        ? "ring-2 ring-offset-1 ring-blue-500 bg-white"
                                         : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
                                 }`}
                             >
-                                {option.label}
+                                <div className="flex items-center gap-2 mb-0.5">
+                                    <span
+                                        className={`text-xs font-bold px-1.5 py-0.5 rounded ${option.color.replace(
+                                            "border-",
+                                            ""
+                                        )} bg-opacity-20`}
+                                    >
+                                        {option.label}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-gray-400">
+                                    {option.desc}
+                                </p>
+
+                                {form.badge === option.value && (
+                                    <div className="absolute top-0 right-0 p-1 bg-blue-500 text-white rounded-bl-lg">
+                                        <Check size={10} />
+                                    </div>
+                                )}
                             </button>
                         ))}
                     </div>
@@ -491,10 +476,6 @@ export function ItemForm({
                         }
                         rows={3}
                         className="w-full px-4 py-3 border border-gray-200 bg-gray-50 rounded-xl outline-none focus:bg-white resize-none transition-all"
-                        onFocus={(e) =>
-                            (e.target.style.borderColor = theme?.primary)
-                        }
-                        onBlur={(e) => (e.target.style.borderColor = "#e5e7eb")}
                         placeholder="Deskripsi menu..."
                     />
                 </div>
@@ -519,7 +500,7 @@ export function ItemForm({
                 </button>
             </div>
 
-            {/* --- CROP MODAL (Disematkan di sini agar logic tetap satu file) --- */}
+            {/* CROP MODAL */}
             <Modal
                 isOpen={showCropModal}
                 onClose={() => {
@@ -534,7 +515,7 @@ export function ItemForm({
                             image={imageSrc}
                             crop={crop}
                             zoom={zoom}
-                            aspect={aspect} // Gunakan state aspect ratio
+                            aspect={aspect}
                             onCropChange={setCrop}
                             onCropComplete={onCropComplete}
                             onZoomChange={setZoom}
@@ -542,7 +523,6 @@ export function ItemForm({
                         />
                     </div>
 
-                    {/* Kontrol Zoom & Aspek Rasio */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-3">
                             <ZoomIn size={16} className="text-gray-500" />
@@ -556,8 +536,6 @@ export function ItemForm({
                                 className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                             />
                         </div>
-
-                        {/* Pilihan Rasio */}
                         <div className="flex justify-center gap-2">
                             {[
                                 { l: "1:1", v: 1 },

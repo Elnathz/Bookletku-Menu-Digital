@@ -17,11 +17,9 @@ import {
     Settings,
     LogOut,
     Store,
-    Share2,
     Star,
     Tag,
 } from "lucide-react";
-
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useSupabase } from "../hooks/useSupabase";
@@ -30,11 +28,8 @@ import Toast from "./Toast";
 
 // --- Components ---
 
-// Komponen Badge Pintar (Support Preset & Custom)
 function Badge({ text, theme }) {
     if (!text) return null;
-
-    // 1. Definisi Preset Style (Ikon & Warna Khusus)
     const presets = {
         popular: {
             label: "Popular",
@@ -59,7 +54,6 @@ function Badge({ text, theme }) {
         },
     };
 
-    // Cek apakah text adalah key preset (case insensitive)
     const presetKey = text.toLowerCase().replace(/\s+/g, "");
     const preset = presets[text] || presets[presetKey];
 
@@ -74,12 +68,10 @@ function Badge({ text, theme }) {
         );
     }
 
-    // 2. Fallback: Custom Badge (Warna mengikuti Tema Toko)
-    // Menampilkan teks apa adanya dari input admin
     return (
         <span
             className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold rounded-lg text-white shadow-sm capitalize"
-            style={{ background: theme.primary }} // Menggunakan warna tema utama
+            style={{ background: theme.primary }}
         >
             <Tag size={12} /> {text}
         </span>
@@ -87,10 +79,8 @@ function Badge({ text, theme }) {
 }
 
 function MenuItemCardLarge({ item, onClick, theme }) {
-    const { t } = useLanguage();
     const formatPrice = (p) =>
         new Intl.NumberFormat("id-ID").format(Number(p || 0));
-
     return (
         <div
             onClick={onClick}
@@ -123,14 +113,12 @@ function MenuItemCardLarge({ item, onClick, theme }) {
                     </div>
                 )}
 
-                {/* TAMPILKAN BADGE (Manual dari Admin) */}
                 {item.badge && (
                     <div className="absolute top-3 left-3 flex flex-wrap gap-2">
                         <Badge text={item.badge} theme={theme} />
                     </div>
                 )}
 
-                {/* Fallback: Jika admin tidak set badge, tapi views tinggi, tampilkan trending otomatis */}
                 {!item.badge && item.views > 150 && (
                     <div className="absolute top-3 left-3">
                         <Badge text="trending" theme={theme} />
@@ -164,16 +152,14 @@ function MenuItemCardLarge({ item, onClick, theme }) {
 }
 
 function ItemDetailModal({ item, isOpen, onClose, onAdd, theme }) {
-    const { t, lang } = useLanguage();
+    const { lang } = useLanguage();
     const [quantity, setQuantity] = useState(1);
     const [note, setNote] = useState("");
 
     if (!isOpen || !item) return null;
-
     const formatPrice = (p) =>
         new Intl.NumberFormat("id-ID").format(Number(p || 0));
     const totalPrice = Number(item.price || 0) * quantity || 0;
-
     const handleAdd = () => {
         if (onAdd) onAdd(item, quantity, note);
         setQuantity(1);
@@ -219,7 +205,6 @@ function ItemDetailModal({ item, isOpen, onClose, onAdd, theme }) {
                         <X size={18} />
                     </button>
 
-                    {/* BADGE DI MODAL */}
                     <div className="absolute bottom-3 left-3 flex gap-2">
                         {item.badge && (
                             <Badge text={item.badge} theme={theme} />
@@ -324,7 +309,6 @@ function ItemDetailModal({ item, isOpen, onClose, onAdd, theme }) {
 
 function OrderTypeModal({ isOpen, onClose, onSelect, theme }) {
     const { lang } = useLanguage();
-
     if (!isOpen) return null;
 
     const orderTypes = [
@@ -351,7 +335,6 @@ function OrderTypeModal({ isOpen, onClose, onSelect, theme }) {
             color: "from-green-500 to-emerald-500",
         },
     ];
-
     return (
         <div
             className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
@@ -435,7 +418,15 @@ const DEFAULT_CATEGORIES = [
 ];
 
 export default function PublicMenu() {
-    const { items = [], settings = {}, loading, updateItem } = useSupabase();
+    // Pastikan submitOrder diambil dari hook
+    const {
+        items = [],
+        settings = {},
+        loading,
+        updateItem,
+        submitOrder,
+    } = useSupabase();
+
     const { user, isAuthenticated, isAdmin, signOut, profile } = useAuth();
     const { t = {}, lang, toggleLang } = useLanguage();
     const { theme } = useTemplate();
@@ -476,6 +467,7 @@ export default function PublicMenu() {
         (sum, it) => sum + Number(it.price || 0) * (it.quantity || 0),
         0
     );
+
     const cartItemsCount = cart.reduce(
         (sum, it) => sum + (it.quantity || 0),
         0
@@ -508,7 +500,6 @@ export default function PublicMenu() {
 
             return [...prev, { ...item, quantity: qty, note }];
         });
-
         showToast(
             t?.addedToCart ||
                 (lang === "id" ? "Ditambahkan ke keranjang" : "Added to cart")
@@ -530,11 +521,6 @@ export default function PublicMenu() {
 
     const onItemClick = async (item) => {
         setSelectedItem(item);
-        try {
-            await updateItem(item.id, { views: (item.views || 0) + 1 });
-        } catch (e) {
-            console.warn("update views failed", e);
-        }
     };
 
     const handleOrderTypeSelect = (type) => {
@@ -543,7 +529,8 @@ export default function PublicMenu() {
         setIsCartOpen(true);
     };
 
-    const orderViaWhatsApp = () => {
+    // --- UPDATE: orderViaWhatsApp dengan Template Struk (Tanpa Emote) ---
+    const orderViaWhatsApp = async () => {
         const phone = (settings?.whatsappNumber || "").replace(/[^0-9]/g, "");
         if (!phone) {
             showToast(
@@ -555,30 +542,88 @@ export default function PublicMenu() {
             return;
         }
 
-        const storeName = settings?.storeName || "Store";
-        const lines = [];
-        lines.push(`*Order from ${storeName}*`);
-        lines.push(`Type: ${selectedOrderType || "unknown"}`);
-        lines.push("");
-        cart.forEach((it, idx) => {
-            lines.push(
-                `${idx + 1}. ${it.name} x${it.quantity} - Rp ${Number(
-                    it.price || 0
-                ).toLocaleString("id-ID")}`
-            );
-            if (it.note) lines.push(`   note: ${it.note}`);
-        });
-        lines.push("");
-        lines.push(
-            `TOTAL: Rp ${Number(cartTotal || 0).toLocaleString("id-ID")}`
+        // 1. Tampilkan notifikasi
+        showToast(
+            lang === "id" ? "Memproses pesanan..." : "Processing order...",
+            "info"
         );
+
+        // 2. Data untuk Database
+        const orderData = {
+            customerName: user?.user_metadata?.name || "Guest",
+            orderType: selectedOrderType || "dine-in",
+            tableNumber: "",
+            totalAmount: cartTotal,
+            notes: cart
+                .map((c) => c.note)
+                .filter(Boolean)
+                .join(", "),
+            customerPhone: "",
+        };
+
+        // 3. Simpan DB (Views naik otomatis)
+        await submitOrder(orderData, cart);
+
+        // 4. Generate Template Struk "Clean"
+        const storeName = (settings?.storeName || "STORE").toUpperCase();
+        const dateNow = new Date().toLocaleString("id-ID", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+        const orderTypeLabel = (selectedOrderType || "DINE-IN").toUpperCase();
+
+        const lines = [];
+
+        // Header
+        lines.push(`================================`);
+        lines.push(`*${storeName}*`);
+        lines.push(`================================`);
+
+        // Info Pelanggan
+        lines.push(`*Date:* ${dateNow}`);
+        lines.push(`*Customer:* ${orderData.customerName}`);
+        lines.push(`*Type:* ${orderTypeLabel}`);
+        lines.push(``);
+        lines.push(`*ORDER DETAILS*`);
+        lines.push(`--------------------------------`);
+
+        // Items Loop
+        cart.forEach((it, idx) => {
+            const itemTotal = Number(it.price || 0) * it.quantity;
+            lines.push(`*${idx + 1}. ${it.name}*`);
+            lines.push(
+                `   ${it.quantity} x ${Number(it.price).toLocaleString(
+                    "id-ID"
+                )} = Rp ${itemTotal.toLocaleString("id-ID")}`
+            );
+
+            if (it.note && it.note.trim() !== "") {
+                lines.push(`   _Note: ${it.note}_`);
+            }
+            lines.push(``); // Spacer antar item
+        });
+
+        // Total Footer
+        lines.push(`--------------------------------`);
+        lines.push(`*TOTAL: Rp ${Number(cartTotal).toLocaleString("id-ID")}*`);
+        lines.push(`--------------------------------`);
+        lines.push(``);
+        lines.push(`Please confirm my order. Thank you.`);
 
         const url =
             "https://wa.me/" +
             phone +
             "?text=" +
             encodeURIComponent(lines.join("\n"));
+
+        // 5. Buka WA
         window.open(url, "_blank");
+
+        setCart([]);
+        setIsCartOpen(false);
     };
 
     const filteredGroups = useMemo(() => {
